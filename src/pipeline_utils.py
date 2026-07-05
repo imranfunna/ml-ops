@@ -82,7 +82,7 @@ def population_stability_index(
     if len(e) != len(a):
         raise ValueError("expected and actual must have same length")
     psi = 0.0
-    for ei, ai in zip(e, a):
+    for ei, ai in zip(e, a, strict=False):
         ei_s = ei if ei > 0 else eps
         ai_s = ai if ai > 0 else eps
         psi += (ai_s - ei_s) * math.log(ai_s / ei_s)
@@ -116,6 +116,6 @@ def top_k_cosine(query_vec, matrix, k: int = 3):
     """
     scores = []
     for i, row in enumerate(matrix):
-        scores.append((i, sum(q * r for q, r in zip(query_vec, row))))
+        scores.append((i, sum(q * r for q, r in zip(query_vec, row, strict=False))))
     scores.sort(key=lambda x: x[1], reverse=True)
     return [i for i, _ in scores[:k]]
