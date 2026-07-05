@@ -2,8 +2,8 @@
 # MAGIC %md
 # MAGIC # 04 — Deployment & Inference
 # MAGIC
-# MAGIC De twee Production-modellen worden geladen uit de Model Registry en
-# MAGIC toegepast op inkomende tickets — zowel **batch** als **streaming** —
+# MAGIC De twee `@champion`-modellen worden geladen uit de **UC Model Registry**
+# MAGIC en toegepast op inkomende tickets — zowel **batch** als **streaming** —
 # MAGIC met volledig logging per predictie voor monitoring.
 # MAGIC
 # MAGIC | Inference mode | Bron | Sink | Wanneer |
@@ -30,12 +30,13 @@ import pandas as pd
 
 log_pipeline_event(spark, "deploy_and_infer", "started")
 
-# --- Production-versies laden uit registry ------------------------------
-# Alias `Production` = latest promoted version. Registered model name is
-# gehardcoded (config) → geen model-drift op naming.
+# --- Champion-versies laden uit UC registry -----------------------------
+# `@champion` = de door de quality-gate goedgekeurde, live-scorende versie.
+# Modelnamen zijn 3-level UC namespaces (catalog.schema.name) — gehardcoded
+# in _common.py zodat er geen naming-drift ontstaat.
 
-edge_uri  = f"models:/{EDGE_MODEL_NAME}/Production"
-cloud_uri = f"models:/{CLOUD_MODEL_NAME}/Production"
+edge_uri  = f"models:/{EDGE_MODEL_NAME}@{CHAMPION_ALIAS}"
+cloud_uri = f"models:/{CLOUD_MODEL_NAME}@{CHAMPION_ALIAS}"
 
 edge_model = mlflow.spark.load_model(edge_uri)
 print(f"✅ edge  model geladen: {edge_uri}")
@@ -193,17 +194,19 @@ def upsert_serving_endpoint(name: str, model_name: str):
     from mlflow.deployments import get_deploy_client
     from mlflow.exceptions import MlflowException
     client = get_deploy_client("databricks")
-    version = MlflowClient().get_latest_versions(model_name, stages=["Production"])[0].version
+    # UC: haal de version via alias (i.p.v. via stage-filter)
+    mv = MlflowClient().get_model_version_by_alias(model_name, CHAMPION_ALIAS)
+    served_name = f"{name}-v{mv.version}"   # geen dots → geldige entity-name
     config = {
         "served_entities": [{
-            "name":                        f"{name}-v{version}",
-            "entity_name":                 model_name,
-            "entity_version":              version,
-            "workload_size":               "Small",
-            "scale_to_zero_enabled":       True,
+            "name":                     served_name,
+            "entity_name":              model_name,        # 3-level UC name
+            "entity_version":           mv.version,
+            "workload_size":            "Small",
+            "scale_to_zero_enabled":    True,
         }],
         "traffic_config": {
-            "routes": [{"served_model_name": f"{name}-v{version}", "traffic_percentage": 100}]
+            "routes": [{"served_model_name": served_name, "traffic_percentage": 100}],
         },
     }
     try:

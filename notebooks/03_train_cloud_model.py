@@ -174,22 +174,30 @@ with mlflow.start_run(run_name="cloud_responder") as run:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Registry stage-transition
+# MAGIC ## UC alias promotion
 # MAGIC Voor de responder gebruiken we top-3 hit rate als quality-gate (`≥ 0.5`).
-# MAGIC Onder de drempel → Staging (agent-review nodig). Boven → Production.
+# MAGIC Onder de drempel → `@challenger` (agent-review nodig). Boven → `@champion`.
 
 # COMMAND ----------
 
 client  = MlflowClient()
-new_ver = client.get_latest_versions(CLOUD_MODEL_NAME, stages=["None"])[0].version
-stage   = "Production" if top3_hit >= 0.5 else "Staging"
-client.transition_model_version_stage(
-    name=CLOUD_MODEL_NAME, version=new_ver, stage=stage,
-    archive_existing_versions=(stage == "Production"))
+new_ver = latest_model_version(CLOUD_MODEL_NAME)   # UC-safe helper uit _common
+
+if top3_hit >= 0.5:
+    client.set_registered_model_alias(CLOUD_MODEL_NAME, CHAMPION_ALIAS, new_ver)
+    try:
+        client.delete_registered_model_alias(CLOUD_MODEL_NAME, CHALLENGER_ALIAS)
+    except Exception:
+        pass
+    alias = CHAMPION_ALIAS
+else:
+    client.set_registered_model_alias(CLOUD_MODEL_NAME, CHALLENGER_ALIAS, new_ver)
+    alias = CHALLENGER_ALIAS
+
 client.set_model_version_tag(CLOUD_MODEL_NAME, new_ver, "top3_intent_hit",
                              f"{top3_hit:.4f}")
 client.set_model_version_tag(CLOUD_MODEL_NAME, new_ver, "run_id", run_id)
-print(f"✅ {CLOUD_MODEL_NAME} v{new_ver} → {stage}")
+print(f"✅ {CLOUD_MODEL_NAME} v{new_ver} → @{alias}")
 
 log_pipeline_event(spark, "train_cloud_model", "success",
-                   f"version={new_ver} stage={stage} top3={top3_hit:.3f}")
+                   f"version={new_ver} alias={alias} top3={top3_hit:.3f}")

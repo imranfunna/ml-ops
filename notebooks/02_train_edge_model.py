@@ -10,8 +10,8 @@
 # MAGIC | Spark ML `Pipeline` | Native distributed, artefact = één `PipelineModel` (features + estimator samen → geen train/serve skew) |
 # MAGIC | TF-IDF + LogisticRegression | Lichtgewicht → laag latency + interpretable weights per class |
 # MAGIC | `CrossValidator` met param-grid | Automatisch tunen van `regParam` en `numFeatures` |
-# MAGIC | MLflow autolog + expliciete logging | Reproduceerbaar, artefacten in registry |
-# MAGIC | Quality-gate voor promotion | Alleen modellen met macro-F1 ≥ `MIN_F1_FOR_PROMOTION` naar Production |
+# MAGIC | MLflow autolog + expliciete logging | Reproduceerbaar, artefacten in **UC Model Registry** |
+# MAGIC | Quality-gate voor promotion | Alleen modellen met macro-F1 ≥ `MIN_F1_FOR_PROMOTION` krijgen `@champion` alias |
 
 # COMMAND ----------
 
@@ -148,29 +148,32 @@ print(f"   macro-F1 (test) = {metrics['test_f1']:.3f}")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Quality gate + registry transition
-# MAGIC **Alleen** als het model boven de drempel scoort wordt het naar Production
-# MAGIC gepromoveerd. Anders blijft de nieuwe versie in Staging voor review.
+# MAGIC ## Quality gate + UC alias promotion
+# MAGIC UC kent geen "stages" meer — we gebruiken **aliases**. `@champion` = huidige
+# MAGIC productie-versie; `@challenger` = wacht op review. Bij promotie schuiven
+# MAGIC we simpelweg de alias-pointer; oude versies blijven bewaard.
 
 # COMMAND ----------
 
-client   = MlflowClient()
-new_ver  = client.get_latest_versions(EDGE_MODEL_NAME, stages=["None"])[0].version
+client  = MlflowClient()
+new_ver = latest_model_version(EDGE_MODEL_NAME)   # UC-safe helper uit _common
 
 if metrics["test_f1"] >= MIN_F1_FOR_PROMOTION:
-    client.transition_model_version_stage(
-        name=EDGE_MODEL_NAME, version=new_ver,
-        stage="Production", archive_existing_versions=True)
-    stage = "Production"
+    client.set_registered_model_alias(EDGE_MODEL_NAME, CHAMPION_ALIAS, new_ver)
+    # Ruim eventueel oude challenger-pointer op — champion is nu leidend.
+    try:
+        client.delete_registered_model_alias(EDGE_MODEL_NAME, CHALLENGER_ALIAS)
+    except Exception:
+        pass
+    alias = CHAMPION_ALIAS
 else:
-    client.transition_model_version_stage(
-        name=EDGE_MODEL_NAME, version=new_ver, stage="Staging")
-    stage = "Staging"
+    client.set_registered_model_alias(EDGE_MODEL_NAME, CHALLENGER_ALIAS, new_ver)
+    alias = CHALLENGER_ALIAS
 
 client.set_model_version_tag(EDGE_MODEL_NAME, new_ver, "test_f1",
                              f"{metrics['test_f1']:.4f}")
 client.set_model_version_tag(EDGE_MODEL_NAME, new_ver, "run_id", run_id)
-print(f"✅ {EDGE_MODEL_NAME} v{new_ver} → {stage}")
+print(f"✅ {EDGE_MODEL_NAME} v{new_ver} → @{alias}")
 
 log_pipeline_event(spark, "train_edge_model", "success",
-                   f"version={new_ver} stage={stage} f1={metrics['test_f1']:.3f}")
+                   f"version={new_ver} alias={alias} f1={metrics['test_f1']:.3f}")

@@ -1,13 +1,17 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 00 — Setup (eenmalig)
+# MAGIC # 00 — Setup (eenmalig, Unity Catalog)
 # MAGIC
-# MAGIC * maakt catalog/schema aan
-# MAGIC * maakt landing- en checkpoint-directories op DBFS
-# MAGIC * kopieert de twee sample-CSV's naar de landing-zone zodat de pipeline er
-# MAGIC   direct mee kan werken
+# MAGIC * maakt UC **catalog** + **schema** + **volume** aan (idempotent)
+# MAGIC * maakt landing-, checkpoint- en artefact-directories binnen het volume
+# MAGIC * controleert of de sample-CSV's in de landing-volume staan
 # MAGIC
-# MAGIC **Deze notebook hoef je maar één keer te draaien per workspace.**
+# MAGIC ⚠️ **Vereisten**
+# MAGIC * De workspace heeft **Unity Catalog** geactiveerd.
+# MAGIC * De runnende identity heeft `CREATE CATALOG` (of de catalog bestaat al
+# MAGIC   en de user heeft `USE CATALOG` + `CREATE SCHEMA` + `CREATE VOLUME`).
+# MAGIC * Cluster gebruikt `data_security_mode = SINGLE_USER` **of** `USER_ISOLATION`
+# MAGIC   (SHARED zonder UC-support werkt niet).
 
 # COMMAND ----------
 
@@ -15,27 +19,30 @@
 
 # COMMAND ----------
 
-# --- schema + DBFS-directories aanmaken ---------------------------------
-ensure_schema(spark)
+# --- UC namespace initialiseren -------------------------------------------
+ensure_uc_objects(spark)
+
+# Subdirs binnen het volume — dbutils.fs.mkdirs werkt op /Volumes/…-paden
 dbutils.fs.mkdirs(LANDING_PATH)
 dbutils.fs.mkdirs(CHECKPOINT_PATH)
 dbutils.fs.mkdirs(ARTIFACT_PATH)
-print("✅ schema en DBFS-paden klaar")
+print(f"✅ UC gereed: {CATALOG}.{SCHEMA}   volume = {VOLUME_ROOT}")
 
 # COMMAND ----------
 
-# --- Sample-data uploaden ------------------------------------------------
-# In een echte omgeving landt de data via Auto Loader vanuit S3/ADLS.
-# Voor de demo verwacht deze notebook dat je de twee CSV's manueel naar
-# `/FileStore/flowsure/landing` upload (zie instructies.md). Deze cel
-# controleert alleen of ze aanwezig zijn.
+# --- Sample-data check ---------------------------------------------------
+# In productie landt data via Auto Loader vanuit S3/ADLS in het volume.
+# Voor de demo verwacht de pipeline dat de twee CSV's in de landing-volume staan
+# (upload via Catalog → Volume → Upload, of vanuit de CLI met
+# `databricks fs cp <file> <volume-path>/` — zie instructies.md).
 
 expected = ["bitext_sample.csv", "twitter_sample.csv"]
 present  = {f.name for f in dbutils.fs.ls(LANDING_PATH)}
 missing  = [f for f in expected if f not in present]
 assert not missing, (
     f"❌ Bestanden ontbreken in {LANDING_PATH}: {missing}. "
-    "Upload ze via Data → Add data → DBFS voordat je verder gaat."
+    f"Upload ze via Catalog → Volume → Upload naar {LANDING_PATH} "
+    "voor je verder gaat (zie instructies.md)."
 )
 print(f"✅ Alle {len(expected)} bronbestanden staan op {LANDING_PATH}")
 

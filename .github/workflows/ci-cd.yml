@@ -98,7 +98,7 @@ jobs:
         run: |
           alerts=$(databricks sql-warehouses execute \
               --warehouse-id ${{ secrets.SQL_WAREHOUSE_ID }} \
-              --query "SELECT count(*) FROM hive_metastore.flowsure.alerts WHERE severity='high' AND created_ts >= current_timestamp() - INTERVAL 1 DAY" \
+              --query "SELECT count(*) FROM flowsure.mlops.alerts WHERE severity='high' AND created_ts >= current_timestamp() - INTERVAL 1 DAY" \
               --output json | jq '.data[0][0]')
           if [ "$alerts" -gt 0 ]; then
             echo "Drift detected — triggering retrain"

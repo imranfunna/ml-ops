@@ -1,5 +1,10 @@
 # Databricks Asset Bundle — declaratieve deployment van notebooks + jobs.
 # Gedeployed met `databricks bundle deploy -t <target>` (dev of prod).
+#
+# Vereist: workspace met Unity Catalog en de catalog `flowsure` (of custom via
+# `_common.py`) bestaat + de run-identity heeft USE CATALOG + CREATE SCHEMA +
+# CREATE VOLUME. Job-clusters draaien in SINGLE_USER mode zodat UC-toegang
+# tot managed tables, volumes en model registry werkt.
 
 bundle:
   name: flowsure-mlops

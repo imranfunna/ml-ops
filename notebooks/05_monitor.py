@@ -169,34 +169,38 @@ log_pipeline_event(spark, "monitoring", "success",
 # MAGIC %md
 # MAGIC ## 6. Dashboard-queries
 # MAGIC Deze SQL-queries kunnen 1-op-1 als panels in een **Databricks SQL
-# MAGIC Dashboard** worden geplakt. Ze zijn gebonden aan de tabellen die deze
-# MAGIC pipeline vult.
+# MAGIC Dashboard** worden geplakt. Ze gebruiken de 3-level UC-namen uit
+# MAGIC `_common.py`, dus ze werken zonder edit als je met de default catalog
+# MAGIC (`flowsure.mlops`) draait.
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Panel 1: predicties per uur per categorie
-# MAGIC SELECT date_trunc('hour', scored_ts) AS h,
-# MAGIC        predicted_category,
-# MAGIC        count(*) AS n
-# MAGIC FROM   hive_metastore.flowsure.tickets_predictions
-# MAGIC WHERE  scored_ts >= current_timestamp() - INTERVAL 7 DAYS
-# MAGIC GROUP  BY h, predicted_category
-# MAGIC ORDER  BY h;
+# Panel 1: predicties per uur per categorie
+display(spark.sql(f"""
+    SELECT date_trunc('hour', scored_ts) AS h,
+           predicted_category,
+           count(*) AS n
+    FROM   {PREDICTIONS_TABLE}
+    WHERE  scored_ts >= current_timestamp() - INTERVAL 7 DAYS
+    GROUP  BY h, predicted_category
+    ORDER  BY h
+"""))
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Panel 2: PSI-trend
-# MAGIC SELECT computed_ts, metric_value AS psi
-# MAGIC FROM   hive_metastore.flowsure.drift_metrics
-# MAGIC WHERE  metric_name = 'psi_category'
-# MAGIC ORDER  BY computed_ts;
+# Panel 2: PSI-trend
+display(spark.sql(f"""
+    SELECT computed_ts, metric_value AS psi
+    FROM   {DRIFT_METRICS_TABLE}
+    WHERE  metric_name = 'psi_category'
+    ORDER  BY computed_ts
+"""))
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Panel 3: recente alerts
-# MAGIC SELECT * FROM hive_metastore.flowsure.alerts
-# MAGIC WHERE created_ts >= current_timestamp() - INTERVAL 7 DAYS
-# MAGIC ORDER BY created_ts DESC;
+# Panel 3: recente alerts
+display(spark.sql(f"""
+    SELECT * FROM {ALERTS_TABLE}
+    WHERE  created_ts >= current_timestamp() - INTERVAL 7 DAYS
+    ORDER  BY created_ts DESC
+"""))

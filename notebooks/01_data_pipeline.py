@@ -13,10 +13,10 @@
 # MAGIC | **KB**     | Deduped `(intent → response)` uit Bitext | Retrieval-basis voor de responder |
 # MAGIC | **Drift baseline** | Category-verdeling van train-set | Referentie voor monitoring |
 # MAGIC
-# MAGIC ### Schaalbaarheid
+# MAGIC ### Schaalbaarheid & governance
 # MAGIC * Alles is een **Spark DataFrame** → transformaties worden distributed uitgevoerd.
 # MAGIC * Bronze wordt via **Auto Loader** (`cloudFiles`) gelezen — incrementeel, exactly-once, checkpointed.
-# MAGIC * Delta Lake geeft ACID + tijdreis, schema-evolutie en OPTIMIZE/Z-ORDER.
+# MAGIC * **Unity Catalog** managed tables + Delta Lake → ACID, tijdreis, lineage, per-object grants.
 # MAGIC * De cleaning-functies zijn **Pandas UDF's** (vectorized) i.p.v. row-wise UDF's.
 
 # COMMAND ----------
