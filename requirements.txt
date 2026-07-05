@@ -1,0 +1,7 @@
+# Runtime dependencies — samen met de standaard Databricks ML Runtime dekt
+# dit alles wat de pipeline en modellen nodig hebben.
+mlflow>=2.10
+scikit-learn>=1.3
+pandas>=2.0
+numpy>=1.24
+delta-spark>=3.0
