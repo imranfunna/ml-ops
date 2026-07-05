@@ -61,7 +61,7 @@ print(f"n_classes={len(labels)} → {labels}")
 tokenizer  = RegexTokenizer(inputCol="text_clean", outputCol="tokens",
                             pattern=r"\W+", minTokenLength=2)
 stopwords  = StopWordsRemover(inputCol="tokens", outputCol="tokens_clean")
-hashing_tf = HashingTF(inputCol="tokens_clean", outputCol="raw_features", numFeatures=4096)
+hashing_tf = HashingTF(inputCol="tokens_clean", outputCol="raw_features", numFeatures=1024)
 idf        = IDF(inputCol="raw_features", outputCol="features")
 label_idx  = StringIndexer(inputCol="category_label", outputCol="label",
                            handleInvalid="keep")
