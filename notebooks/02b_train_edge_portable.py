@@ -37,8 +37,8 @@ from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_sc
 from sklearn.pipeline import Pipeline
 
 
-ensure_uc_objects(spark)
-mlflow.set_registry_uri("databricks-uc")
+# ensure_uc_objects(spark)  # Fails on free tiers due to CREATE CATALOG privileges
+# mlflow.set_registry_uri("databricks-uc")  # Already handled in _common.py
 
 MODEL_NAME_ONNX = f"{CATALOG}.{SCHEMA}.flowsure_edge_classifier_onnx"
 ONNX_VOLUME_DIR = MOBILE_PATH   # /Volumes/flowsure/mlops/artifacts/mobile
