@@ -269,21 +269,21 @@ if DEPLOY_SERVERLESS:
         ("flowsure-edge-classifier", EDGE_MODEL_NAME),
         ("flowsure-cloud-responder", CLOUD_MODEL_NAME),
     ]:
-    try:
-        status = upsert_serving_endpoint(endpoint, model)
-        print(f"✅ endpoint {endpoint}: {status}")
-        wait_until_ready(endpoint)
-        print(f"✅ endpoint {endpoint}: READY")
-        resp = smoke_test(endpoint, SMOKE_PAYLOADS[endpoint])
-        print(f"✅ endpoint {endpoint}: smoke-test OK → {str(resp)[:120]}…")
-        log_pipeline_event(spark, "serving_deploy", "success",
-                           f"endpoint={endpoint} model={model}")
-    except Exception as e:
-        msg = f"{type(e).__name__}: {e}"
-        print(f"❌ endpoint {endpoint} FAILED: {msg}")
-        log_pipeline_event(spark, "serving_deploy", "error",
-                           f"endpoint={endpoint} err={msg}")
-        deployment_errors.append((endpoint, msg))
+        try:
+            status = upsert_serving_endpoint(endpoint, model)
+            print(f"✅ endpoint {endpoint}: {status}")
+            wait_until_ready(endpoint)
+            print(f"✅ endpoint {endpoint}: READY")
+            resp = smoke_test(endpoint, SMOKE_PAYLOADS[endpoint])
+            print(f"✅ endpoint {endpoint}: smoke-test OK → {str(resp)[:120]}…")
+            log_pipeline_event(spark, "serving_deploy", "success",
+                               f"endpoint={endpoint} model={model}")
+        except Exception as e:
+            msg = f"{type(e).__name__}: {e}"
+            print(f"❌ endpoint {endpoint} FAILED: {msg}")
+            log_pipeline_event(spark, "serving_deploy", "error",
+                               f"endpoint={endpoint} err={msg}")
+            deployment_errors.append((endpoint, msg))
 
     if deployment_errors:
         raise RuntimeError(f"serving deployment failed voor: {deployment_errors}")
