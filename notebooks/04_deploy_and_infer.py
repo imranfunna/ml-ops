@@ -19,12 +19,16 @@
 # COMMAND ----------
 
 import time
+import os
 import mlflow
 import mlflow.pyfunc
 from pyspark.sql import functions as F, types as T
 from pyspark.sql.functions import current_timestamp
 from pyspark.ml.functions import vector_to_array
 import pandas as pd
+
+os.environ["SPARKML_TEMP_DFS_PATH"] = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}/checkpoints"
+os.environ["MLFLOW_DFS_TMP"]       = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}/checkpoints"
 
 # COMMAND ----------
 

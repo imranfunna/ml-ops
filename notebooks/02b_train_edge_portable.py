@@ -118,9 +118,10 @@ with mlflow.start_run(run_name="edge_onnx_portable") as run:
         onnx_path.write_bytes(onnx_model.SerializeToString())
         labels_path.write_text(json.dumps(labels, ensure_ascii=False, indent=2))
 
+        import shutil
         # Copy to UC Volume for mobile/Docker consumption
-        dbutils.fs.cp(f"file:{onnx_path}",   f"{ONNX_VOLUME_DIR}/model.onnx",   True)
-        dbutils.fs.cp(f"file:{labels_path}", f"{ONNX_VOLUME_DIR}/labels.json",  True)
+        shutil.copy(onnx_path, f"{ONNX_VOLUME_DIR}/model.onnx")
+        shutil.copy(labels_path, f"{ONNX_VOLUME_DIR}/labels.json")
 
         mlflow.log_artifact(str(onnx_path),   artifact_path="onnx")
         mlflow.log_artifact(str(labels_path), artifact_path="onnx")
