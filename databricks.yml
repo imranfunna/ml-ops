@@ -1,19 +1,8 @@
 # Databricks Asset Bundle — declaratieve deployment van notebooks + jobs.
-# Gedeployed met `databricks bundle deploy -t <target>` (dev of prod).
-#
-# Vereist: workspace met Unity Catalog en de catalog `flowsure` (of custom via
-# `_common.py`) bestaat + de run-identity heeft USE CATALOG + CREATE SCHEMA +
-# CREATE VOLUME. Job-clusters draaien in SINGLE_USER mode zodat UC-toegang
-# tot managed tables, volumes en model registry werkt.
+# Gecorrigeerd voor Serverless compute workspaces.
 
 bundle:
   name: flowsure-mlops
-
-variables:
-  cluster_node_type:
-    default: Standard_DS3_v2       # goedkoop starter-formaat; groter voor prod
-  runtime:
-    default: 15.4.x-ml-scala2.12   # DBR ML runtime → MLflow, sklearn, delta out-of-the-box
 
 # ---------------------------------------------------------------------------
 # Targets = environments. Dev deployt naar je eigen workspace-folder,
@@ -24,18 +13,18 @@ targets:
     mode: development
     default: true
     workspace:
-      host: https://<workspace>.cloud.databricks.com   # override via env var
+      host: https://dbc-4fba3147-3ed4.cloud.databricks.com
       root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/flowsure/dev
   prod:
     mode: production
     workspace:
-      host: https://<workspace>.cloud.databricks.com
+      host: https://dbc-4fba3147-3ed4.cloud.databricks.com
       root_path: /Shared/.bundle/flowsure/prod
     run_as:
-      service_principal_name: flowsure-mlops-sp   # productie draait onder SP, nooit onder user
+      service_principal_name: flowsure-mlops-sp
 
 # ---------------------------------------------------------------------------
-# Resources
+# Resources (Volledig serverless gemaakt)
 # ---------------------------------------------------------------------------
 resources:
 
@@ -53,16 +42,13 @@ resources:
       max_concurrent_runs: 1
       tasks:
         - task_key: data_pipeline
-          notebook_task: { notebook_path: notebooks/01_data_pipeline }
-          job_cluster_key: main
+          notebook_task: { notebook_path: notebooks/01_data_pipeline.py }
         - task_key: train_edge
           depends_on: [{ task_key: data_pipeline }]
-          notebook_task: { notebook_path: notebooks/02_train_edge_model }
-          job_cluster_key: main
+          notebook_task: { notebook_path: notebooks/02_train_edge_model.py }
         - task_key: train_edge_portable
           depends_on: [{ task_key: data_pipeline }]
-          notebook_task: { notebook_path: notebooks/02b_train_edge_portable }
-          job_cluster_key: main
+          notebook_task: { notebook_path: notebooks/02b_train_edge_portable.py }
           libraries:
             - pypi: { package: "scikit-learn==1.5.2" }
             - pypi: { package: "skl2onnx==1.17.0" }
@@ -70,62 +56,36 @@ resources:
             - pypi: { package: "onnx==1.17.0" }
         - task_key: train_cloud
           depends_on: [{ task_key: data_pipeline }]
-          notebook_task: { notebook_path: notebooks/03_train_cloud_model }
-          job_cluster_key: main
+          notebook_task: { notebook_path: notebooks/03_train_cloud_model.py }
         - task_key: deploy_and_infer
           depends_on:
             - { task_key: train_edge }
             - { task_key: train_cloud }
-          notebook_task: { notebook_path: notebooks/04_deploy_and_infer }
-          job_cluster_key: main
+          notebook_task: { notebook_path: notebooks/04_deploy_and_infer.py }
         - task_key: monitor
           depends_on: [{ task_key: deploy_and_infer }]
-          notebook_task: { notebook_path: notebooks/05_monitor }
-          job_cluster_key: main
-      job_clusters:
-        - job_cluster_key: main
-          new_cluster:
-            spark_version: ${var.runtime}
-            node_type_id:  ${var.cluster_node_type}
-            num_workers:   2
-            data_security_mode: SINGLE_USER
-            custom_tags:
-              project: flowsure
-              env: ${bundle.target}
+          notebook_task: { notebook_path: notebooks/05_monitor.py }
 
     # ---------- Streaming-inference: 24/7 continuous ------------------
     flowsure_streaming_inference:
       name: flowsure-streaming-inference
-      continuous: { pause_status: PAUSED }   # in prod: UNPAUSED
+      continuous: { pause_status: PAUSED }
       tasks:
         - task_key: stream
           notebook_task:
-            notebook_path: notebooks/04_deploy_and_infer
+            notebook_path: notebooks/04_deploy_and_infer.py
             base_parameters: { mode: streaming_only }
-          new_cluster:
-            spark_version: ${var.runtime}
-            node_type_id:  ${var.cluster_node_type}
-            num_workers:   1
 
     # ---------- CT: retrain-job getriggerd door drift alerts ----------
     flowsure_retrain_on_drift:
       name: flowsure-retrain-on-drift
-      # Geen schedule → getriggerd door API-call vanuit 05_monitor of externe systeem
       tasks:
         - task_key: retrain_edge
-          notebook_task: { notebook_path: notebooks/02_train_edge_model }
-          job_cluster_key: main
+          notebook_task: { notebook_path: notebooks/02_train_edge_model.py }
           libraries:
             - pypi: { package: scikit-learn }
             - pypi: { package: skl2onnx }
             - pypi: { package: onnxruntime }
         - task_key: redeploy
           depends_on: [{ task_key: retrain_edge }]
-          notebook_task: { notebook_path: notebooks/04_deploy_and_infer }
-          job_cluster_key: main
-      job_clusters:
-        - job_cluster_key: main
-          new_cluster:
-            spark_version: ${var.runtime}
-            node_type_id:  ${var.cluster_node_type}
-            num_workers:   2
+          notebook_task: { notebook_path: notebooks/04_deploy_and_infer.py }

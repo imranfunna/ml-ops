@@ -1,0 +1,5 @@
+# Dev/CI-only dependencies (staan NIET op de cluster in productie)
+-r requirements.txt
+pytest>=8.0
+pytest-cov>=4.1
+ruff>=0.4

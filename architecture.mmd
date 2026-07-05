@@ -1,0 +1,100 @@
+flowchart TB
+    subgraph SRC["📥 Sources (multi-channel)"]
+        S1[Email API]
+        S2[Chat Widget]
+        S3[Webform]
+        S4[In-App]
+        S5[Twitter/Social]
+    end
+
+    subgraph UC["🏛️ Unity Catalog — flowsure.mlops"]
+        subgraph VOL["📁 Volume: artifacts"]
+            V0[landing/ · checkpoints/ · models/]
+        end
+        subgraph ING["🥉 Bronze — Raw Ingestion (Delta + Auto Loader)"]
+            B1[tickets_bronze<br/>schema-on-read, immutable]
+        end
+
+        subgraph SIL["🥈 Silver — Validation & Cleaning"]
+            V1[Great-Expectations-style checks]
+            V2[PII masking - GDPR]
+            V3[Text normalization]
+            V4[Language detection]
+            S6[tickets_silver]
+        end
+
+        subgraph GLD["🥇 Gold — Feature Store"]
+            G1[tickets_gold]
+            G2[gold train / val / test]
+            G3[knowledge_base]
+        end
+
+        subgraph DRIFT["🔍 Data Drift Monitor"]
+            D1[PSI + KS test]
+            D2[drift_metrics]
+        end
+    end
+
+    subgraph EDGE["🧠 Edge Model — Classifier"]
+        E1[Spark ML Pipeline<br/>TF-IDF + LogReg]
+        E2[CrossValidator tuning]
+        E3[MLflow experiment]
+        E4[UC Registry<br/>flowsure.mlops.flowsure_edge_classifier]
+    end
+
+    subgraph CLOUD["☁️ Cloud Model — Response Generator"]
+        C1[TF-IDF retrieval index]
+        C2[PyFunc wrapper]
+        C3[MLflow experiment]
+        C4[UC Registry<br/>flowsure.mlops.flowsure_cloud_responder]
+    end
+
+    subgraph DEPLOY["🚀 Deployment"]
+        DP1[Alias @champion]
+        DP2[Batch Spark UDF]
+        DP3[Structured Streaming]
+        DP4[REST endpoint<br/>MLflow Serving]
+    end
+
+    subgraph MON["📊 Monitoring & Alerts"]
+        M1[Latency & throughput]
+        M2[Prediction distribution]
+        M3[Per-slice fairness]
+        M4[Concept drift]
+        M5[monitoring_log + alerts + dashboard]
+    end
+
+    subgraph CT["🔁 CI / CD / CT"]
+        CT1[GitHub Actions CI<br/>lint + tests]
+        CT2[Databricks Asset Bundle CD]
+        CT3[Retrain trigger<br/>on drift / schedule]
+    end
+
+    S1 & S2 & S3 & S4 & S5 --> V0 --> B1
+    B1 --> V1 --> V2 --> V3 --> V4 --> S6
+    S6 --> G1 --> G2
+    S6 --> G3
+    G1 --> D1 --> D2
+    G2 --> E1 --> E2 --> E3 --> E4
+    G3 --> C1 --> C2 --> C3 --> C4
+    E4 --> DP1
+    C4 --> DP1
+    DP1 --> DP2 & DP3 & DP4
+    DP2 & DP3 & DP4 --> M1 & M2 & M3 & M4 --> M5
+    M4 --> CT3
+    CT1 --> CT2 --> DP1
+    CT3 --> E1
+    CT3 --> C1
+
+    classDef bronze fill:#cd7f32,color:#fff
+    classDef silver fill:#c0c0c0,color:#000
+    classDef gold fill:#ffd700,color:#000
+    classDef model fill:#4a90e2,color:#fff
+    classDef monitor fill:#e74c3c,color:#fff
+    classDef uc fill:#2c3e50,color:#fff
+    class B1 bronze
+    class V1,V2,V3,V4,S6 silver
+    class G1,G2,G3 gold
+    class E1,E2,E3,E4,C1,C2,C3,C4 model
+    class M1,M2,M3,M4,M5,D1,D2 monitor
+    class V0 uc
