@@ -35,7 +35,7 @@ from pyspark.sql import functions as F
 log_pipeline_event(spark, "train_edge_model", "started")
 
 mlflow.set_experiment(EXPERIMENT_PATH)
-mlflow.pyspark.ml.autolog(log_models=False)   # models loggen we handmatig i.v.m. signature
+#mlflow.pyspark.ml.autolog(log_models=False)   # models loggen we handmatig i.v.m. signature
 
 train = spark.table(GOLD_TRAIN)
 val   = spark.table(GOLD_VAL)
