@@ -31,6 +31,7 @@ from mlflow.tracking import MlflowClient
 from pyspark.sql import functions as F
 import os
 os.environ["SPARKML_TEMP_DFS_PATH"] = "/Volumes/flowsure/mlops/artifacts/checkpoints"
+os.environ["MLFLOW_DFS_TMP"]       = "/Volumes/flowsure/mlops/artifacts/checkpoints"
 
 # COMMAND ----------
 
