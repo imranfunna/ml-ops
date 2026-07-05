@@ -9,11 +9,11 @@
 # MAGIC
 # MAGIC | Beslissing | Reden |
 # MAGIC |------------|-------|
-# MAGIC | Spark ML `Pipeline` | Native distributed, artefact = één `PipelineModel` (features + estimator samen → geen train/serve skew) |
-# MAGIC | TF-IDF + LogisticRegression | Lichtgewicht → laag latency + interpretable weights per class |
+# MAGIC | Spark ML `Pipeline` | Native distributed, artefact = één `PipelineModel` (features + estimator samen > geen train/serve skew) |
+# MAGIC | TF-IDF + LogisticRegression | Lichtgewicht > laag latency + interpretable weights per class |
 # MAGIC | `CrossValidator` met param-grid | Automatisch tunen van `regParam` en `numFeatures` |
 # MAGIC | MLflow autolog + expliciete logging | Reproduceerbaar, artefacten in **UC Model Registry** |
-# MAGIC | Quality-gate voor promotion | Alleen modellen met macro-F1 ≥ `MIN_F1_FOR_PROMOTION` krijgen `@champion` alias |
+# MAGIC | Quality-gate voor promotion | Alleen modellen met macro-F1 >= `MIN_F1_FOR_PROMOTION` krijgen `@champion` alias |
 
 # COMMAND ----------
 
