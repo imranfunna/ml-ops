@@ -43,6 +43,7 @@ VOLUME_ROOT     = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}"
 LANDING_PATH    = f"{VOLUME_ROOT}/landing"          # raw drop-zone
 CHECKPOINT_PATH = f"{VOLUME_ROOT}/checkpoints"      # streaming checkpoints
 ARTIFACT_PATH   = f"{VOLUME_ROOT}/models"           # extra artefacten
+MOBILE_PATH     = f"{VOLUME_ROOT}/mobile"           # ONNX-exports voor iOS/Android
 
 # MLflow — UC model registry i.p.v. workspace registry
 mlflow.set_registry_uri("databricks-uc")

@@ -83,7 +83,54 @@ jobs:
           databricks bundle deploy   -t prod
 
   # -----------------------------------------------------------------------
-  # 4. CT — nightly retrain check (roept alleen retrain-job aan als drift alert)
+  # 4. Docker publish — bakt @champion ONNX in image en pusht naar GHCR
+  # -----------------------------------------------------------------------
+  docker_publish:
+    needs: cd_prod
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+
+      - name: Pull @champion ONNX from UC Volume
+        env:
+          DATABRICKS_HOST:  ${{ secrets.DATABRICKS_HOST_PROD }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_PROD }}
+        run: |
+          mkdir -p docker/models
+          databricks fs cp -r /Volumes/flowsure/mlops/artifacts/mobile docker/models
+          ls -lh docker/models
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push baked image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker
+          file: docker/Dockerfile.baked
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/flowsure-edge:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/flowsure-edge:latest
+
+      - name: Attach mobile artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            docker/models/model.onnx
+            docker/models/labels.json
+
+  # -----------------------------------------------------------------------
+  # 5. CT — nightly retrain check (roept alleen retrain-job aan als drift alert)
   # -----------------------------------------------------------------------
   ct_nightly_check:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

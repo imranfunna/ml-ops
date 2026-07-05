@@ -26,6 +26,7 @@ ensure_uc_objects(spark)
 dbutils.fs.mkdirs(LANDING_PATH)
 dbutils.fs.mkdirs(CHECKPOINT_PATH)
 dbutils.fs.mkdirs(ARTIFACT_PATH)
+dbutils.fs.mkdirs(MOBILE_PATH)
 print(f"✅ UC gereed: {CATALOG}.{SCHEMA}   volume = {VOLUME_ROOT}")
 
 # COMMAND ----------
