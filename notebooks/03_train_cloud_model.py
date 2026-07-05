@@ -97,6 +97,7 @@ kb_vectors = vectorizer.fit_transform(kb_pdf["canonical_query"].fillna(""))
 
 with open("/tmp/responder/vectorizer.pkl", "wb") as f: pickle.dump(vectorizer, f)
 np.save("/tmp/responder/kb_vectors.npy", kb_vectors.toarray())
+kb_pdf.attrs.clear()
 kb_pdf.to_parquet("/tmp/responder/kb.parquet")
 
 # COMMAND ----------

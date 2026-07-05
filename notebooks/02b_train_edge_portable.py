@@ -11,6 +11,7 @@
 
 # COMMAND ----------
 
+# MAGIC %run ./_common
 # MAGIC %pip install --quiet scikit-learn==1.5.2 skl2onnx==1.17.0 onnxruntime==1.19.2 onnx==1.17.0
 # MAGIC dbutils.library.restartPython()
 
@@ -29,17 +30,6 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from sklearn.pipeline import Pipeline
 
-from _common import (
-    CATALOG,
-    SCHEMA,
-    MOBILE_PATH,
-    GOLD_TRAIN,
-    GOLD_TEST,
-    EXPERIMENT_PATH,
-    MIN_F1_FOR_PROMOTION,
-    CHAMPION_ALIAS,
-    ensure_uc_objects,
-)
 
 ensure_uc_objects(spark)
 mlflow.set_registry_uri("databricks-uc")
