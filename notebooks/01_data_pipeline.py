@@ -263,7 +263,7 @@ display(baseline_cat)
 
 # COMMAND ----------
 
-spark.sql(f"OPTIMIZE {SILVER_TABLE} ZORDER BY (channel, language)")
+spark.sql(f"OPTIMIZE {SILVER_TABLE}")
 spark.sql(f"OPTIMIZE {GOLD_TABLE}   ZORDER BY (category_label)")
 print("✅ OPTIMIZE + ZORDER klaar")
 
