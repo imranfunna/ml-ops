@@ -49,11 +49,6 @@ resources:
         - task_key: train_edge_portable
           depends_on: [{ task_key: data_pipeline }]
           notebook_task: { notebook_path: notebooks/02b_train_edge_portable.py }
-          libraries:
-            - pypi: { package: "scikit-learn==1.5.2" }
-            - pypi: { package: "skl2onnx==1.17.0" }
-            - pypi: { package: "onnxruntime==1.19.2" }
-            - pypi: { package: "onnx==1.17.0" }
         - task_key: train_cloud
           depends_on: [{ task_key: data_pipeline }]
           notebook_task: { notebook_path: notebooks/03_train_cloud_model.py }
@@ -82,10 +77,6 @@ resources:
       tasks:
         - task_key: retrain_edge
           notebook_task: { notebook_path: notebooks/02_train_edge_model.py }
-          libraries:
-            - pypi: { package: scikit-learn }
-            - pypi: { package: skl2onnx }
-            - pypi: { package: onnxruntime }
         - task_key: redeploy
           depends_on: [{ task_key: retrain_edge }]
           notebook_task: { notebook_path: notebooks/04_deploy_and_infer.py }
