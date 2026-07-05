@@ -1,4 +1,6 @@
 # Databricks notebook source
+# MAGIC %pip install --quiet scikit-learn skl2onnx onnxruntime onnx
+
 # MAGIC %md
 # MAGIC # 02 — Edge model (categorie-classifier)
 # MAGIC
@@ -12,6 +14,10 @@
 # MAGIC | `CrossValidator` met param-grid | Automatisch tunen van `regParam` en `numFeatures` |
 # MAGIC | MLflow autolog + expliciete logging | Reproduceerbaar, artefacten in **UC Model Registry** |
 # MAGIC | Quality-gate voor promotion | Alleen modellen met macro-F1 ≥ `MIN_F1_FOR_PROMOTION` krijgen `@champion` alias |
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
 
 # COMMAND ----------
 
@@ -195,17 +201,6 @@ log_pipeline_event(spark, "train_edge_model", "success",
 # MAGIC
 # MAGIC Typische footprint: **< 5 MB**, **< 10 ms** inferentie per ticket, geen netwerk.
 
-# COMMAND ----------
-
-# MAGIC %pip install --quiet scikit-learn skl2onnx onnxruntime onnx
-
-# COMMAND ----------
-
-dbutils.library.restartPython()
-
-# COMMAND ----------
-
-# MAGIC %run ./_common
 
 # COMMAND ----------
 

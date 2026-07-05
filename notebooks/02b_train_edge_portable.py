@@ -11,12 +11,15 @@
 
 # COMMAND ----------
 
-# MAGIC %run ./_common
+# MAGIC %pip install --quiet scikit-learn==1.5.2 skl2onnx==1.17.0 onnxruntime==1.19.2 onnx==1.17.0
 
 # COMMAND ----------
 
-# MAGIC %pip install --quiet scikit-learn==1.5.2 skl2onnx==1.17.0 onnxruntime==1.19.2 onnx==1.17.0
-# MAGIC dbutils.library.restartPython()
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
+# MAGIC %run ./_common
 
 # COMMAND ----------
 
