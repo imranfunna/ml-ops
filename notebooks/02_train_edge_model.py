@@ -60,7 +60,7 @@ print(f"n_classes={len(labels)} → {labels}")
 tokenizer  = RegexTokenizer(inputCol="text_clean", outputCol="tokens",
                             pattern=r"\W+", minTokenLength=2)
 stopwords  = StopWordsRemover(inputCol="tokens", outputCol="tokens_clean")
-hashing_tf = HashingTF(inputCol="tokens_clean", outputCol="raw_features")
+hashing_tf = HashingTF(inputCol="tokens_clean", outputCol="raw_features", numFeatures=4096)
 idf        = IDF(inputCol="raw_features", outputCol="features")
 label_idx  = StringIndexer(inputCol="category_label", outputCol="label",
                            handleInvalid="keep")
@@ -77,8 +77,7 @@ pipeline = Pipeline(stages=[tokenizer, stopwords, hashing_tf, idf, label_idx, lr
 # COMMAND ----------
 
 grid = (ParamGridBuilder()
-        .addGrid(hashing_tf.numFeatures, [2**14, 2**16])
-        .addGrid(lr.regParam,            [0.0, 0.01, 0.1])
+        .addGrid(lr.regParam,            [0.01, 0.1])
         .build())
 
 evaluator = MulticlassClassificationEvaluator(labelCol="label",
