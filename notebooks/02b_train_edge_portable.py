@@ -159,11 +159,17 @@ with mlflow.start_run(run_name="edge_onnx_portable") as run:
         onnx_path.write_bytes(onnx_model.SerializeToString())
         labels_path.write_text(json.dumps(labels, ensure_ascii=False))
 
+        import pandas as pd
+        sample_input = pd.DataFrame({"text": ["I need help with my account"]})
+        sample_output = pd.DataFrame([{"category": "SUPPORT", "confidence": 0.99}])
+        signature = mlflow.models.infer_signature(sample_input, sample_output)
+
         mlflow.pyfunc.log_model(
             artifact_path="pyfunc",
             python_model=OnnxEdgeWrapper(),
             artifacts={"onnx_model": str(onnx_path), "labels": str(labels_path)},
             pip_requirements=["onnxruntime==1.19.2", "numpy", "pandas"],
+            signature=signature,
             registered_model_name=MODEL_NAME_ONNX if metrics["test_f1"] >= MIN_F1_FOR_PROMOTION else None,
         )
 
@@ -190,7 +196,8 @@ else:
 
 import onnxruntime as ort
 local = "/tmp/edge_check.onnx"
-dbutils.fs.cp(f"{ONNX_VOLUME_DIR}/model.onnx", f"file:{local}", True)
+import shutil
+shutil.copy(f"{ONNX_VOLUME_DIR}/model.onnx", local)
 sess = ort.InferenceSession(local, providers=["CPUExecutionProvider"])
 sample = np.array([["my invoice is wrong please help"],
                    ["cannot login to the app"]], dtype=object)

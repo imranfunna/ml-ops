@@ -79,8 +79,9 @@ def run_batch_inference(source_df):
     # Edge model
     scored = edge_model.transform(source_df)
 
-    # index → naam via array-lookup
-    labels_expr = F.array([F.lit(x) for x in label_names])
+    # index → naam via array-lookup (append 'UNKNOWN' for handleInvalid='keep' bucket)
+    labels_ext = list(label_names) + ["UNKNOWN"]
+    labels_expr = F.array([F.lit(x) for x in labels_ext])
     scored = (scored
         .withColumn("predicted_category",
                     labels_expr.getItem(F.col("prediction").cast("int")))
@@ -151,7 +152,8 @@ CREATE TABLE IF NOT EXISTS {INCOMING_STREAM_TABLE} (
 def start_streaming_inference():
     stream = (spark.readStream.format("delta").table(INCOMING_STREAM_TABLE))
     scored = edge_model.transform(stream)
-    labels_expr = F.array([F.lit(x) for x in label_names])
+    labels_ext = list(label_names) + ["UNKNOWN"]
+    labels_expr = F.array([F.lit(x) for x in labels_ext])
     scored = (scored
         .withColumn("predicted_category",
                     labels_expr.getItem(F.col("prediction").cast("int")))
