@@ -1,6 +1,8 @@
 # Databricks notebook source
 # MAGIC %pip install --quiet scikit-learn skl2onnx onnxruntime onnx
 
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC # 02 — Edge model (categorie-classifier)
 # MAGIC
