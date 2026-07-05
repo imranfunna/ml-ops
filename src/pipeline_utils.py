@@ -3,11 +3,12 @@
 Isolated from Spark so they can be unit-tested in CI without a Spark session.
 Used by the Databricks notebooks via Pandas UDFs or direct imports.
 """
+
 from __future__ import annotations
 
 import math
 import re
-from typing import Iterable
+from collections.abc import Iterable
 
 # ---------- Text cleaning & PII masking ----------
 
@@ -56,16 +57,23 @@ def detect_language(text: str) -> str:
     if not text:
         return "unknown"
     t = text.lower()
-    nl = sum(w in t for w in [" de ", " het ", " een ", " ik ", " je ", " niet ", " met ", " voor "])
-    en = sum(w in t for w in [" the ", " a ", " an ", " i ", " you ", " not ", " with ", " for "])
-    de = sum(w in t for w in [" der ", " die ", " das ", " ich ", " nicht ", " und ", " mit ", " für "])
-    fr = sum(w in t for w in [" le ", " la ", " les ", " je ", " ne ", " pas ", " avec ", " pour "])
+
+    nl_words = [" de ", " het ", " een ", " ik ", " je ", " niet ", " met ", " voor "]
+    en_words = [" the ", " a ", " an ", " i ", " you ", " not ", " with ", " for "]
+    de_words = [" der ", " die ", " das ", " ich ", " nicht ", " und ", " mit ", " für "]
+    fr_words = [" le ", " la ", " les ", " je ", " ne ", " pas ", " avec ", " pour "]
+
+    nl = sum(w in t for w in nl_words)
+    en = sum(w in t for w in en_words)
+    de = sum(w in t for w in de_words)
+    fr = sum(w in t for w in fr_words)
     scores = {"nl": nl, "en": en, "de": de, "fr": fr}
     best = max(scores, key=scores.get)
     return best if scores[best] > 0 else "en"  # default English
 
 
 # ---------- Data drift metrics ----------
+
 
 def population_stability_index(
     expected: Iterable[float],
@@ -106,6 +114,7 @@ def align_distributions(expected: dict, actual: dict) -> tuple[list[float], list
 
 
 # ---------- Simple retrieval helpers used by the responder model ----------
+
 
 def top_k_cosine(query_vec, matrix, k: int = 3):
     """Return indices of top-k cosine-similar rows in ``matrix`` for ``query_vec``.

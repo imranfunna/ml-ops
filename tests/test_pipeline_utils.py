@@ -1,4 +1,5 @@
 """Unit tests for pipeline_utils. Runs in CI without Spark."""
+
 import pathlib
 import sys
 
