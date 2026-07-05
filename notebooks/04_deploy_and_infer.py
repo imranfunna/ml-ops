@@ -185,16 +185,24 @@ print("✅ streaming inference batch afgerond")
 # MAGIC MLflow Deployments API. Vereist dat je workspace Model Serving heeft
 # MAGIC geactiveerd en dat de gebruiker `CAN_MANAGE` heeft op het model.
 # MAGIC
-# MAGIC De cel is **idempotent**: bestaat het endpoint al → update, anders → create.
-# MAGIC Faalt de call (bv. geen serving in je workspace) → we loggen en gaan verder.
+# MAGIC Per endpoint doen we drie dingen — **fail-loud**:
+# MAGIC 1. **Upsert** — idempotente create-or-update op basis van de `@champion` versie.
+# MAGIC 2. **Wait-for-ready** — poll de endpoint-state tot `READY / NOT_UPDATING`.
+# MAGIC 3. **Smoke-test** — echte `/invocations`-call met een sample payload.
+# MAGIC
+# MAGIC Als één van de drie stappen faalt voor edge of cloud → het notebook
+# MAGIC raiset aan het eind. Dat zorgt dat de Databricks Workflow (en dus de CI/CD-run)
+# MAGIC rood wordt bij een gefaalde deployment — geen stille regressies meer.
 
 # COMMAND ----------
 
-def upsert_serving_endpoint(name: str, model_name: str):
-    from mlflow.deployments import get_deploy_client
-    from mlflow.exceptions import MlflowException
-    client = get_deploy_client("databricks")
-    # UC: haal de version via alias (i.p.v. via stage-filter)
+from mlflow.deployments import get_deploy_client
+from mlflow.exceptions import MlflowException
+
+DEPLOY_CLIENT = get_deploy_client("databricks")
+
+def upsert_serving_endpoint(name: str, model_name: str) -> str:
+    """Create-or-update een Model Serving endpoint voor een UC-model @champion."""
     mv = MlflowClient().get_model_version_by_alias(model_name, CHAMPION_ALIAS)
     served_name = f"{name}-v{mv.version}"   # geen dots → geldige entity-name
     config = {
@@ -210,13 +218,44 @@ def upsert_serving_endpoint(name: str, model_name: str):
         },
     }
     try:
-        client.get_endpoint(name)
-        client.update_endpoint(endpoint=name, config=config)
+        DEPLOY_CLIENT.get_endpoint(name)
+        DEPLOY_CLIENT.update_endpoint(endpoint=name, config=config)
         return "updated"
     except MlflowException:
-        client.create_endpoint(name=name, config=config)
+        DEPLOY_CLIENT.create_endpoint(name=name, config=config)
         return "created"
 
+def wait_until_ready(name: str, timeout_s: int = 900, poll_s: int = 20) -> dict:
+    """Blokkeer tot het endpoint READY is; raise bij FAILED of timeout."""
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        ep = DEPLOY_CLIENT.get_endpoint(name)
+        state = (ep.get("state") or {}).get("config_update", "") + "/" + \
+                (ep.get("state") or {}).get("ready", "")
+        if "READY" in state and "NOT_UPDATING" in state:
+            return ep
+        if "FAILED" in state:
+            raise RuntimeError(f"endpoint {name} update FAILED: {ep.get('state')}")
+        print(f"⏳ {name}: {state} — wachten…")
+        time.sleep(poll_s)
+    raise TimeoutError(f"endpoint {name} niet READY binnen {timeout_s}s")
+
+def smoke_test(name: str, payload: dict) -> dict:
+    """Doet een echte /invocations call om te bewijzen dat het endpoint scoort."""
+    resp = DEPLOY_CLIENT.predict(endpoint=name, inputs=payload)
+    if not resp or "predictions" not in resp:
+        raise RuntimeError(f"smoke-test {name} gaf geen predictions terug: {resp}")
+    return resp
+
+SAMPLE_TEXT = "how do i reset my password"
+SMOKE_PAYLOADS = {
+    "flowsure-edge-classifier": {"dataframe_split": {
+        "columns": ["text_clean"], "data": [[SAMPLE_TEXT]]}},
+    "flowsure-cloud-responder": {"dataframe_split": {
+        "columns": ["text_clean"], "data": [[SAMPLE_TEXT]]}},
+}
+
+deployment_errors = []
 for endpoint, model in [
     ("flowsure-edge-classifier", EDGE_MODEL_NAME),
     ("flowsure-cloud-responder", CLOUD_MODEL_NAME),
@@ -224,8 +263,21 @@ for endpoint, model in [
     try:
         status = upsert_serving_endpoint(endpoint, model)
         print(f"✅ endpoint {endpoint}: {status}")
+        wait_until_ready(endpoint)
+        print(f"✅ endpoint {endpoint}: READY")
+        resp = smoke_test(endpoint, SMOKE_PAYLOADS[endpoint])
+        print(f"✅ endpoint {endpoint}: smoke-test OK → {str(resp)[:120]}…")
+        log_pipeline_event(spark, "serving_deploy", "success",
+                           f"endpoint={endpoint} model={model}")
     except Exception as e:
-        print(f"⚠️  serving endpoint {endpoint} skipped: {type(e).__name__}: {e}")
+        msg = f"{type(e).__name__}: {e}"
+        print(f"❌ endpoint {endpoint} FAILED: {msg}")
+        log_pipeline_event(spark, "serving_deploy", "error",
+                           f"endpoint={endpoint} err={msg}")
+        deployment_errors.append((endpoint, msg))
+
+if deployment_errors:
+    raise RuntimeError(f"serving deployment failed voor: {deployment_errors}")
 
 # COMMAND ----------
 
