@@ -16,11 +16,12 @@
 # COMMAND ----------
 
 STAGES = [
-    ("01_data_pipeline",      3600),
-    ("02_train_edge_model",   7200),
-    ("03_train_cloud_model",  3600),
-    ("04_deploy_and_infer",   3600),
-    ("05_monitor",             900),
+    ("01_data_pipeline",         3600),
+    ("02_train_edge_model",      7200),
+    ("02b_train_edge_portable",  3600),
+    ("03_train_cloud_model",     3600),
+    ("04_deploy_and_infer",      3600),
+    ("05_monitor",                900),
 ]
 
 for nb, timeout in STAGES:

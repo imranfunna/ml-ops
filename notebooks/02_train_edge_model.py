@@ -257,8 +257,7 @@ with open(labels_json, "w") as f:
 # --- Sanity check: ONNX-runtime inferentie moet identiek zijn aan sklearn ---
 sess = ort.InferenceSession(local_onnx, providers=["CPUExecutionProvider"])
 sample = pdf_test["text_clean"].astype(str).head(50).to_numpy().reshape(-1, 1)
-onnx_pred_idx = sess.run(None, {"text_clean": sample})[0].argmax(axis=1)
-onnx_pred = np.array(sk_pipe.named_steps["clf"].classes_)[onnx_pred_idx]
+onnx_pred = sess.run(None, {"text_clean": sample})[0]
 sk_pred   = sk_pipe.predict(sample.ravel())
 parity    = float((onnx_pred == sk_pred).mean())
 print(f"ONNX ↔ sklearn parity op 50 samples = {parity:.2%}")
@@ -274,8 +273,7 @@ quantize_dynamic(local_onnx, local_onnx_int8, weight_type=QuantType.QInt8)
 
 # Parity-check ook op de gequantiseerde variant (mag 1 label afwijken op 50)
 sess_q = ort.InferenceSession(local_onnx_int8, providers=["CPUExecutionProvider"])
-q_pred_idx = sess_q.run(None, {"text_clean": sample})[0].argmax(axis=1)
-q_pred = np.array(sk_pipe.named_steps["clf"].classes_)[q_pred_idx]
+q_pred = sess_q.run(None, {"text_clean": sample})[0]
 parity_int8 = float((q_pred == sk_pred).mean())
 print(f"INT8 ONNX ↔ sklearn parity op 50 samples = {parity_int8:.2%}")
 assert parity_int8 >= 0.95, "INT8 quantisatie degradeert te veel — niet uploaden."

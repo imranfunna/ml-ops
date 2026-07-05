@@ -50,8 +50,8 @@ dbutils.fs.mkdirs(ONNX_VOLUME_DIR)
 
 # COMMAND ----------
 
-train_pdf = spark.table(GOLD_TRAIN).select("text_clean", "category").toPandas()
-test_pdf  = spark.table(GOLD_TEST ).select("text_clean", "category").toPandas()
+train_pdf = spark.table(GOLD_TRAIN).select("text_clean", "category_label").toPandas()
+test_pdf  = spark.table(GOLD_TEST ).select("text_clean", "category_label").toPandas()
 
 train_pdf = train_pdf.dropna()
 test_pdf  = test_pdf.dropna()
@@ -59,10 +59,10 @@ test_pdf  = test_pdf.dropna()
 print(f"train={len(train_pdf):,} rows | test={len(test_pdf):,} rows")
 
 # Deterministic label encoding — same order in Python, Docker and mobile
-labels = sorted(train_pdf["category"].unique().tolist())
+labels = sorted(train_pdf["category_label"].unique().tolist())
 label_to_idx = {lbl: i for i, lbl in enumerate(labels)}
-y_train = train_pdf["category"].map(label_to_idx).to_numpy()
-y_test  = test_pdf ["category"].map(label_to_idx).to_numpy()
+y_train = train_pdf["category_label"].map(label_to_idx).to_numpy()
+y_test  = test_pdf ["category_label"].map(label_to_idx).to_numpy()
 
 # COMMAND ----------
 

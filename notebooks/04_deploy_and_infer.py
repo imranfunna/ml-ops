@@ -255,11 +255,14 @@ SMOKE_PAYLOADS = {
         "columns": ["text_clean"], "data": [[SAMPLE_TEXT]]}},
 }
 
+DEPLOY_SERVERLESS = False  # Set to True when running on a premium workspace with Model Serving enabled
+
 deployment_errors = []
-for endpoint, model in [
-    ("flowsure-edge-classifier", EDGE_MODEL_NAME),
-    ("flowsure-cloud-responder", CLOUD_MODEL_NAME),
-]:
+if DEPLOY_SERVERLESS:
+    for endpoint, model in [
+        ("flowsure-edge-classifier", EDGE_MODEL_NAME),
+        ("flowsure-cloud-responder", CLOUD_MODEL_NAME),
+    ]:
     try:
         status = upsert_serving_endpoint(endpoint, model)
         print(f"✅ endpoint {endpoint}: {status}")
@@ -276,8 +279,11 @@ for endpoint, model in [
                            f"endpoint={endpoint} err={msg}")
         deployment_errors.append((endpoint, msg))
 
-if deployment_errors:
-    raise RuntimeError(f"serving deployment failed voor: {deployment_errors}")
+    if deployment_errors:
+        raise RuntimeError(f"serving deployment failed voor: {deployment_errors}")
+else:
+    print("⏭️ Skipping Serverless Model Serving deployment (DEPLOY_SERVERLESS=False)")
+    log_pipeline_event(spark, "serving_deploy", "skipped", "Serverless endpoints disabled")
 
 # COMMAND ----------
 
