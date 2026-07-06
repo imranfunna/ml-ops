@@ -99,11 +99,12 @@ jobs:
 
       - name: Pull @champion ONNX from UC Volume
         env:
-          DATABRICKS_HOST:  ${{ secrets.DATABRICKS_HOST_DEV }}   # <-- GEWIJZIGD NAAR _DEV
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}  # <-- GEWIJZIGD NAAR _DEV
+          DATABRICKS_HOST:  ${{ secrets.DATABRICKS_HOST_DEV }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
         run: |
           mkdir -p docker/models
-          databricks fs cp -r /Volumes/flowsure/mlops/artifacts/mobile docker/models
+          # Toegevoegd: dbfs: voor het cloud-pad om lokale verwarring te voorkomen
+          databricks fs cp -r dbfs:/Volumes/flowsure/mlops/artifacts/mobile docker/models
           ls -lh docker/models
 
       - name: Log in to GHCR
