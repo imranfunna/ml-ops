@@ -110,6 +110,8 @@ cv = CrossValidator(estimator=pipeline,
 # COMMAND ----------
 
 with mlflow.start_run(run_name="edge_classifier_cv") as run:
+    mlflow.pyspark.ml.autolog(disable=True)
+    
     cv_model     = pipeline.fit(train)
     best_model   = cv_model
     best_lr      = best_model.stages[-1]
