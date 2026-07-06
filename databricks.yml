@@ -14,13 +14,12 @@ targets:
     default: true
     workspace:
       host: https://dbc-4fba3147-3ed4.cloud.databricks.com
-      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/flowsure/dev
+      root_path: /Workspace/Users/24110167@student.hhs.nl/.bundle/flowsure/dev
   prod:
-    mode: development # Houd dit op development om admin-checks te passeren
+    mode: development
     workspace:
       host: https://dbc-4fba3147-3ed4.cloud.databricks.com
-      # Verplaatst van /Shared/ naar een eigen submap in jouw gebruikersfolder:
-      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/flowsure/prod
+      root_path: /Workspace/Users/24110167@student.hhs.nl/.bundle/flowsure/prod
 
 # ---------------------------------------------------------------------------
 # Resources (Volledig serverless gemaakt)
