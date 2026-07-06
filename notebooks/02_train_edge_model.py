@@ -112,8 +112,11 @@ cv = CrossValidator(estimator=pipeline,
 with mlflow.start_run(run_name="edge_classifier_cv") as run:
     mlflow.pyspark.ml.autolog(disable=True)
     
-    cv_model     = pipeline.fit(train)
-    best_model   = cv_model
+    # Truncate lineage to prevent Spark Connect ML from serializing the Delta log
+    train = train.localCheckpoint()
+    
+    cv_model     = cv.fit(train)
+    best_model   = cv_model.bestModel
     best_lr      = best_model.stages[-1]
     best_hash_tf = best_model.stages[2]
 
