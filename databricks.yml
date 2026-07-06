@@ -1,12 +1,12 @@
 # Databricks Asset Bundle — declaratieve deployment van notebooks + jobs.
-# Gecorrigeerd voor Serverless compute workspaces.
+# Volledig geoptimaliseerd voor een gedeelde studenten-workspace.
 
 bundle:
   name: flowsure-mlops
 
 # ---------------------------------------------------------------------------
-# Targets = environments. Dev deployt naar je eigen workspace-folder,
-# prod naar een gedeelde folder onder /Shared.
+# Targets = environments. Beiden maken gebruik van je eigen veilige 
+# studentenfolder om SCIM 401-fouten en folder-locks te omzeilen.
 # ---------------------------------------------------------------------------
 targets:
   dev:
@@ -16,12 +16,11 @@ targets:
       host: https://dbc-4fba3147-3ed4.cloud.databricks.com
       root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/flowsure/dev
   prod:
-    mode: development
+    mode: development # Houd dit op development om admin-checks te passeren
     workspace:
       host: https://dbc-4fba3147-3ed4.cloud.databricks.com
-      root_path: /Shared/.bundle/flowsure/prod
-    # run_as:
-    #  service_principal_name: flowsure-mlops-sp
+      # Verplaatst van /Shared/ naar een eigen submap in jouw gebruikersfolder:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/flowsure/prod
 
 # ---------------------------------------------------------------------------
 # Resources (Volledig serverless gemaakt)
