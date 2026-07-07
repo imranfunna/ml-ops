@@ -14,7 +14,7 @@
 # MAGIC
 # MAGIC ### Waarom retrieval en niet een LLM-call?
 # MAGIC * Geen externe kosten / latency, deterministisch reproducable.
-# MAGIC * De KB is klein (< 100 entries) → in-memory nearest-neighbour is O(ms).
+# MAGIC * De KB is klein (< 100 entries) > in-memory nearest-neighbour is O(ms).
 # MAGIC * **Toggle** aanwezig (`USE_FOUNDATION_MODEL = True`) die in productie
 # MAGIC   een Databricks Foundation Model endpoint aanroept via `mlflow.deployments`.
 
@@ -185,7 +185,7 @@ with mlflow.start_run(run_name="cloud_responder") as run:
 
 # MAGIC %md
 # MAGIC ## UC alias promotion
-# MAGIC Voor de responder gebruiken we top-3 hit rate als quality-gate (`≥ 0.5`).
+# MAGIC Voor de responder gebruiken we top-3 hit rate als quality-gate (`>= 0.5`).
 # MAGIC Onder de drempel → `@challenger` (agent-review nodig). Boven → `@champion`.
 
 # COMMAND ----------
