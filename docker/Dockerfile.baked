@@ -2,14 +2,20 @@
 # Wordt door CI (job `docker_publish`) gebouwd na een succesvolle @champion promotie.
 FROM python:3.11-slim
 
+# Systeemvariabelen instellen (inclusief de UTF-8 taal-instellingen voor ONNX)
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    MODEL_DIR=/models
+  PYTHONUNBUFFERED=1 \
+  MODEL_DIR=/models \
+  LANG=en_US.UTF-8 \
+  LC_ALL=en_US.UTF-8
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+# Voeg locales toe aan apt-get, genereer en_US.UTF-8 en maak de cache netjes leeg
+RUN apt-get update && apt-get install -y --no-install-recommends curl locales \
+  && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
+  && locale-gen en_US.UTF-8 \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -17,6 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 COPY models/ /models/
 
+# De applicatie draait intern op poort 8080
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
   CMD curl -fsS http://localhost:8080/health || exit 1
