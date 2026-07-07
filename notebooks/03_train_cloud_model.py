@@ -20,6 +20,10 @@
 
 # COMMAND ----------
 
+# MAGIC %pip install sentence-transformers
+
+# COMMAND ----------
+
 # MAGIC %run ./_common
 
 # COMMAND ----------
