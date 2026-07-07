@@ -77,7 +77,7 @@ sk_pipe = SkPipeline([
 param_grid = {"clf__C": [1.0, 10.0, 100.0]}
 
 gs = GridSearchCV(sk_pipe, param_grid, cv=3, scoring="f1_macro",
-                  refit=True, n_jobs=-1)
+                  refit=True, n_jobs=None)
 gs.fit(pdf_train["text_clean"].astype(str), pdf_train["category_label"])
 best_pipe = gs.best_estimator_
 print(f"Best C = {gs.best_params_['clf__C']}, CV F1 = {gs.best_score_:.3f}")

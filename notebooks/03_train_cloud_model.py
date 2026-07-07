@@ -64,10 +64,12 @@ kb_pdf.head()
 # COMMAND ----------
 
 class RetrievalResponder(mlflow.pyfunc.PythonModel):
-
     def load_context(self, context):
+        import numpy as np
         from sentence_transformers import SentenceTransformer
-        self.model = SentenceTransformer("all-MiniLM-L6-v2")
+        
+        # Laad ingebakken model (geen HF downloads op read-only executors!)
+        self.model = SentenceTransformer(context.artifacts["minilm"])
         with open(context.artifacts["kb_vectors"], "rb") as f:
             self.kb_vectors = np.load(f, allow_pickle=False)
         self.kb = pd.read_parquet(context.artifacts["kb_df"])
@@ -94,9 +96,10 @@ class RetrievalResponder(mlflow.pyfunc.PythonModel):
 import os
 os.makedirs("/tmp/responder", exist_ok=True)
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
-kb_vectors = model.encode(kb_pdf["canonical_query"].fillna("").tolist())
+embedder = SentenceTransformer("all-MiniLM-L6-v2")
+kb_vectors = embedder.encode(kb_pdf["canonical_query"].fillna("").tolist())
 
+# Voor legacy compatibility in de rest van dit script, sla ook lokaal op
 np.save("/tmp/responder/kb_vectors.npy", kb_vectors)
 kb_pdf.attrs.clear()
 kb_pdf.to_parquet("/tmp/responder/kb.parquet")
@@ -111,7 +114,7 @@ kb_pdf.to_parquet("/tmp/responder/kb.parquet")
 # COMMAND ----------
 
 test_pdf = spark.table(GOLD_TEST).select("text_clean", "intent_label").toPandas()
-q_vec    = model.encode(test_pdf["text_clean"].fillna("").tolist())
+q_vec    = embedder.encode(test_pdf["text_clean"].fillna("").tolist())
 sims     = cosine_similarity(q_vec, kb_vectors)
 best_idx = sims.argmax(axis=1)
 predicted_intents = kb_pdf["intent_label"].iloc[best_idx].values
@@ -150,28 +153,35 @@ with mlflow.start_run(run_name="cloud_responder") as run:
                      "framework": "sklearn+pyfunc",
                      "dataset":   "bitext_kb"})
 
-    input_example = pd.DataFrame({"text_clean": ["how do i reset my password?"]})
-    signature = mlflow.models.infer_signature(
-        input_example,
-        pd.DataFrame({"suggested_response": ["..."],
-                      "matched_intent":     ["..."],
-                      "confidence":         [0.0]}),
-    )
-    mlflow.pyfunc.log_model(
-        artifact_path="model",
-        python_model=RetrievalResponder(),
-        artifacts={
-            "kb_vectors": "/tmp/responder/kb_vectors.npy",
-            "kb_df":      "/tmp/responder/kb.parquet",
-        },
-        input_example=input_example,
-        signature=signature,
-        registered_model_name=CLOUD_MODEL_NAME,
-        pip_requirements=["scikit-learn", "pandas", "numpy", "sentence-transformers"],
-    )
-    run_id = run.info.run_id
+    import tempfile
+    from pathlib import Path
+    
+    with tempfile.TemporaryDirectory() as tmp:
+        # Sla ook de Transformer lokaal op om in te bakken
+        local_minilm_path = Path(tmp) / "minilm"
+        embedder.save(str(local_minilm_path))
 
-# COMMAND ----------
+        input_example = pd.DataFrame({"text_clean": ["how do i reset my password?"]})
+        signature = mlflow.models.infer_signature(
+            input_example,
+            pd.DataFrame({"suggested_response": ["..."],
+                          "matched_intent":     ["..."],
+                          "confidence":         [0.0]}),
+        )
+        mlflow.pyfunc.log_model(
+            artifact_path="model",
+            python_model=RetrievalResponder(),
+            artifacts={
+                "kb_vectors": "/tmp/responder/kb_vectors.npy",
+                "kb_df":      "/tmp/responder/kb.parquet",
+                "minilm":     str(local_minilm_path),
+            },
+            input_example=input_example,
+            signature=signature,
+            registered_model_name=CLOUD_MODEL_NAME,
+            pip_requirements=["scikit-learn", "pandas", "numpy", "sentence-transformers==3.4.1"],
+        )
+    run_id = run.info.run_id
 
 # MAGIC %md
 # MAGIC ## UC alias promotion
