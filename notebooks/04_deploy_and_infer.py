@@ -14,10 +14,6 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install sentence-transformers
-
-# COMMAND ----------
-
 # MAGIC %run ./_common
 
 # COMMAND ----------
@@ -45,13 +41,13 @@ log_pipeline_event(spark, "deploy_and_infer", "started")
 edge_uri  = f"models:/{EDGE_MODEL_NAME}@{CHAMPION_ALIAS}"
 cloud_uri = f"models:/{CLOUD_MODEL_NAME}@{CHAMPION_ALIAS}"
 
-# Edge model als Spark UDF → distributed inference (sklearn pyfunc)
+# Edge model als Spark UDF > distributed inference (sklearn pyfunc)
 edge_udf = mlflow.pyfunc.spark_udf(spark, edge_uri, result_type="struct<predicted_category:string,category_confidence:double>")
-print(f"✅ edge  model geladen: {edge_uri}")
+print(f"DONE edge  model geladen: {edge_uri}")
 
-# Cloud model als Spark UDF → distributed inference
+# Cloud model als Spark UDF > distributed inference
 cloud_udf = mlflow.pyfunc.spark_udf(spark, cloud_uri, result_type="struct<suggested_response:string,matched_intent:string,confidence:double>")
-print(f"✅ cloud model geladen: {cloud_uri}")
+print(f"DONE cloud model geladen: {cloud_uri}")
 
 # COMMAND ----------
 
@@ -108,7 +104,7 @@ def run_batch_inference(source_df):
     elapsed = time.time() - t0
     n       = scored.count()
     latency = 1000 * elapsed / max(n, 1)
-    print(f"✅ batch: {n:,} rijen in {elapsed:.1f}s → ~{latency:.1f} ms/rij")
+    print(f"DONE batch: {n:,} rijen in {elapsed:.1f}s > ~{latency:.1f} ms/rij")
     return n, latency
 
 # --- unlabeled tickets (bv. Twitter) ---
@@ -165,7 +161,7 @@ def start_streaming_inference():
 
 query = start_streaming_inference()
 query.awaitTermination()
-print("✅ streaming inference batch afgerond")
+print("DONE streaming inference batch afgerond")
 
 # COMMAND ----------
 
@@ -227,7 +223,7 @@ def wait_until_ready(name: str, timeout_s: int = 900, poll_s: int = 20) -> dict:
             return ep
         if "FAILED" in state:
             raise RuntimeError(f"endpoint {name} update FAILED: {ep.get('state')}")
-        print(f"⏳ {name}: {state} — wachten…")
+        print(f"WAIT {name}: {state} -- wachten...")
         time.sleep(poll_s)
     raise TimeoutError(f"endpoint {name} niet READY binnen {timeout_s}s")
 
@@ -256,16 +252,16 @@ if DEPLOY_SERVERLESS:
     ]:
         try:
             status = upsert_serving_endpoint(endpoint, model)
-            print(f"✅ endpoint {endpoint}: {status}")
+            print(f"DONE endpoint {endpoint}: {status}")
             wait_until_ready(endpoint)
-            print(f"✅ endpoint {endpoint}: READY")
+            print(f"DONE endpoint {endpoint}: READY")
             resp = smoke_test(endpoint, SMOKE_PAYLOADS[endpoint])
-            print(f"✅ endpoint {endpoint}: smoke-test OK → {str(resp)[:120]}…")
+            print(f"DONE endpoint {endpoint}: smoke-test OK > {str(resp)[:120]}...")
             log_pipeline_event(spark, "serving_deploy", "success",
                                f"endpoint={endpoint} model={model}")
         except Exception as e:
             msg = f"{type(e).__name__}: {e}"
-            print(f"❌ endpoint {endpoint} FAILED: {msg}")
+            print(f"FAIL endpoint {endpoint} FAILED: {msg}")
             log_pipeline_event(spark, "serving_deploy", "error",
                                f"endpoint={endpoint} err={msg}")
             deployment_errors.append((endpoint, msg))
@@ -273,7 +269,7 @@ if DEPLOY_SERVERLESS:
     if deployment_errors:
         raise RuntimeError(f"serving deployment failed voor: {deployment_errors}")
 else:
-    print("⏭️ Skipping Serverless Model Serving deployment (DEPLOY_SERVERLESS=False)")
+    print("SKIP Skipping Serverless Model Serving deployment (DEPLOY_SERVERLESS=False)")
     log_pipeline_event(spark, "serving_deploy", "skipped", "Serverless endpoints disabled")
 
 # COMMAND ----------

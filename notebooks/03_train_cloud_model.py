@@ -1,6 +1,6 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 03 — Cloud model (retrieval-augmented responder)
+# MAGIC # 03 -- Cloud model (retrieval-augmented responder)
 # MAGIC
 # MAGIC **Doel**: gegeven een klantvraag > een conceptantwoord voorstellen dat de
 # MAGIC agent kan reviewen en versturen.
@@ -10,7 +10,7 @@
 # MAGIC 2. Bij een nieuwe vraag: vind de top-K meest vergelijkbare KB-entries via
 # MAGIC    cosine similarity en geef het antwoord van de nr. 1 terug.
 # MAGIC 3. Wrap dit als een **`mlflow.pyfunc.PythonModel`** zodat het model
-# MAGIC    portable is — zelfde artefact draait als batch UDF, streaming en REST endpoint.
+# MAGIC    portable is -- zelfde artefact draait als batch UDF, streaming en REST endpoint.
 # MAGIC
 # MAGIC ### Waarom retrieval en niet een LLM-call?
 # MAGIC * Geen externe kosten / latency, deterministisch reproducable.
@@ -20,22 +20,20 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install sentence-transformers
-
-# COMMAND ----------
-
 # MAGIC %run ./_common
 
 # COMMAND ----------
 
 import json
+import pickle
+import os
 import mlflow
 import mlflow.pyfunc
 import numpy as np
 import pandas as pd
 from mlflow.tracking import MlflowClient
-from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 # COMMAND ----------
 
@@ -51,7 +49,6 @@ mlflow.set_experiment(EXPERIMENT_PATH)
 
 kb_pdf = spark.table(KB_TABLE).toPandas()
 print(f"KB entries: {len(kb_pdf)}")
-kb_pdf.head()
 
 # COMMAND ----------
 
@@ -65,18 +62,20 @@ kb_pdf.head()
 
 class RetrievalResponder(mlflow.pyfunc.PythonModel):
     def load_context(self, context):
-        import numpy as np
-        from sentence_transformers import SentenceTransformer
+        import pickle
+        import pandas as pd
         
-        # Laad ingebakken model (geen HF downloads op read-only executors!)
-        self.model = SentenceTransformer(context.artifacts["minilm"])
+        with open(context.artifacts["vectorizer"], "rb") as f:
+            self.vectorizer = pickle.load(f)
         with open(context.artifacts["kb_vectors"], "rb") as f:
-            self.kb_vectors = np.load(f, allow_pickle=False)
+            self.kb_vectors = pickle.load(f)
         self.kb = pd.read_parquet(context.artifacts["kb_df"])
 
     def predict(self, context, model_input: pd.DataFrame) -> pd.DataFrame:
+        from sklearn.metrics.pairwise import cosine_similarity
+        
         queries = model_input["text_clean"].fillna("").astype(str).tolist()
-        q_vec   = self.model.encode(queries)
+        q_vec   = self.vectorizer.transform(queries)
         sims    = cosine_similarity(q_vec, self.kb_vectors)
         best    = sims.argmax(axis=1)
         confs   = sims.max(axis=1)
@@ -93,14 +92,17 @@ class RetrievalResponder(mlflow.pyfunc.PythonModel):
 
 # COMMAND ----------
 
-import os
 os.makedirs("/tmp/responder", exist_ok=True)
 
-embedder = SentenceTransformer("all-MiniLM-L6-v2")
-kb_vectors = embedder.encode(kb_pdf["canonical_query"].fillna("").tolist())
+vectorizer = TfidfVectorizer(lowercase=True, ngram_range=(1, 2))
+kb_vectors = vectorizer.fit_transform(kb_pdf["canonical_query"].fillna("").tolist())
 
 # Voor legacy compatibility in de rest van dit script, sla ook lokaal op
-np.save("/tmp/responder/kb_vectors.npy", kb_vectors)
+with open("/tmp/responder/vectorizer.pkl", "wb") as f:
+    pickle.dump(vectorizer, f)
+with open("/tmp/responder/kb_vectors.pkl", "wb") as f:
+    pickle.dump(kb_vectors, f)
+
 kb_pdf.attrs.clear()
 kb_pdf.to_parquet("/tmp/responder/kb.parquet")
 
@@ -108,13 +110,13 @@ kb_pdf.to_parquet("/tmp/responder/kb.parquet")
 
 # MAGIC %md
 # MAGIC ## Evaluatie
-# MAGIC We meten hit-rate op de holdout: voor elke test-query — matcht het
+# MAGIC We meten hit-rate op de holdout: voor elke test-query -- matcht het
 # MAGIC top-1 antwoord met het gouden antwoord op **intent-niveau**?
 
 # COMMAND ----------
 
 test_pdf = spark.table(GOLD_TEST).select("text_clean", "intent_label").toPandas()
-q_vec    = embedder.encode(test_pdf["text_clean"].fillna("").tolist())
+q_vec    = vectorizer.transform(test_pdf["text_clean"].fillna("").tolist())
 sims     = cosine_similarity(q_vec, kb_vectors)
 best_idx = sims.argmax(axis=1)
 predicted_intents = kb_pdf["intent_label"].iloc[best_idx].values
@@ -146,54 +148,46 @@ with mlflow.start_run(run_name="cloud_responder") as run:
         "n_kb_entries":    len(kb_pdf),
     })
     mlflow.log_params({
-        "retriever":  "sentence-transformers",
-        "model":      "all-MiniLM-L6-v2",
+        "retriever":  "tfidf",
+        "model":      "sklearn_tfidf",
     })
     mlflow.set_tags({"model_type": "cloud_responder",
                      "framework": "sklearn+pyfunc",
                      "dataset":   "bitext_kb"})
 
-    import tempfile
-    from pathlib import Path
-    
-    with tempfile.TemporaryDirectory() as tmp:
-        # Sla ook de Transformer lokaal op om in te bakken
-        local_minilm_path = Path(tmp) / "minilm"
-        embedder.save(str(local_minilm_path))
-
-        input_example = pd.DataFrame({"text_clean": ["how do i reset my password?"]})
-        signature = mlflow.models.infer_signature(
-            input_example,
-            pd.DataFrame({"suggested_response": ["..."],
-                          "matched_intent":     ["..."],
-                          "confidence":         [0.0]}),
-        )
-        mlflow.pyfunc.log_model(
-            artifact_path="model",
-            python_model=RetrievalResponder(),
-            artifacts={
-                "kb_vectors": "/tmp/responder/kb_vectors.npy",
-                "kb_df":      "/tmp/responder/kb.parquet",
-                "minilm":     str(local_minilm_path),
-            },
-            input_example=input_example,
-            signature=signature,
-            registered_model_name=CLOUD_MODEL_NAME,
-            pip_requirements=["scikit-learn", "pandas", "numpy", "sentence-transformers==3.4.1"],
-        )
+    input_example = pd.DataFrame({"text_clean": ["how do i reset my password?"]})
+    signature = mlflow.models.infer_signature(
+        input_example,
+        pd.DataFrame({"suggested_response": ["..."],
+                      "matched_intent":     ["..."],
+                      "confidence":         [0.0]}),
+    )
+    mlflow.pyfunc.log_model(
+        artifact_path="model",
+        python_model=RetrievalResponder(),
+        artifacts={
+            "kb_vectors": "/tmp/responder/kb_vectors.pkl",
+            "vectorizer": "/tmp/responder/vectorizer.pkl",
+            "kb_df":      "/tmp/responder/kb.parquet",
+        },
+        input_example=input_example,
+        signature=signature,
+        registered_model_name=CLOUD_MODEL_NAME,
+        pip_requirements=["scikit-learn", "pandas", "numpy"],
+    )
     run_id = run.info.run_id
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## UC alias promotion
-# MAGIC Voor de responder gebruiken we top-3 hit rate als quality-gate (`>= 0.5`).
-# MAGIC Onder de drempel > `@challenger` (agent-review nodig). Boven > `@champion`.
+# MAGIC Voor de responder gebruiken we top-3 hit rate als quality-gate (>= 0.5).
+# MAGIC Onder de drempel > @challenger (agent-review nodig). Boven > @champion.
 
 # COMMAND ----------
 
 client  = MlflowClient()
-new_ver = latest_model_version(CLOUD_MODEL_NAME)   # UC-safe helper uit _common
+new_ver = latest_model_version(CLOUD_MODEL_NAME)
 
 if top3_hit >= 0.5:
     client.set_registered_model_alias(CLOUD_MODEL_NAME, CHAMPION_ALIAS, new_ver)
@@ -209,7 +203,7 @@ else:
 client.set_model_version_tag(CLOUD_MODEL_NAME, new_ver, "top3_intent_hit",
                              f"{top3_hit:.4f}")
 client.set_model_version_tag(CLOUD_MODEL_NAME, new_ver, "run_id", run_id)
-print(f"✅ {CLOUD_MODEL_NAME} v{new_ver} > @{alias}")
+print(f"DONE {CLOUD_MODEL_NAME} v{new_ver} > @{alias}")
 
 log_pipeline_event(spark, "train_cloud_model", "success",
                    f"version={new_ver} alias={alias} top3={top3_hit:.3f}")
