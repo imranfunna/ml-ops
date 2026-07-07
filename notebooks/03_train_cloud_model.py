@@ -20,6 +20,10 @@
 
 # COMMAND ----------
 
+# MAGIC %pip install sentence-transformers
+
+# COMMAND ----------
+
 # MAGIC %run ./_common
 
 # COMMAND ----------
@@ -30,7 +34,7 @@ import mlflow.pyfunc
 import numpy as np
 import pandas as pd
 from mlflow.tracking import MlflowClient
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # COMMAND ----------
@@ -62,16 +66,15 @@ kb_pdf.head()
 class RetrievalResponder(mlflow.pyfunc.PythonModel):
 
     def load_context(self, context):
-        with open(context.artifacts["vectorizer"], "rb") as f:
-            import pickle
-            self.vectorizer = pickle.load(f)
+        from sentence_transformers import SentenceTransformer
+        self.model = SentenceTransformer("all-MiniLM-L6-v2")
         with open(context.artifacts["kb_vectors"], "rb") as f:
             self.kb_vectors = np.load(f, allow_pickle=False)
         self.kb = pd.read_parquet(context.artifacts["kb_df"])
 
     def predict(self, context, model_input: pd.DataFrame) -> pd.DataFrame:
         queries = model_input["text_clean"].fillna("").astype(str).tolist()
-        q_vec   = self.vectorizer.transform(queries)
+        q_vec   = self.model.encode(queries)
         sims    = cosine_similarity(q_vec, self.kb_vectors)
         best    = sims.argmax(axis=1)
         confs   = sims.max(axis=1)
@@ -88,15 +91,13 @@ class RetrievalResponder(mlflow.pyfunc.PythonModel):
 
 # COMMAND ----------
 
-import pickle, os
+import os
 os.makedirs("/tmp/responder", exist_ok=True)
 
-vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1,
-                             max_features=20_000, sublinear_tf=True)
-kb_vectors = vectorizer.fit_transform(kb_pdf["canonical_query"].fillna(""))
+model = SentenceTransformer("all-MiniLM-L6-v2")
+kb_vectors = model.encode(kb_pdf["canonical_query"].fillna("").tolist())
 
-with open("/tmp/responder/vectorizer.pkl", "wb") as f: pickle.dump(vectorizer, f)
-np.save("/tmp/responder/kb_vectors.npy", kb_vectors.toarray())
+np.save("/tmp/responder/kb_vectors.npy", kb_vectors)
 kb_pdf.attrs.clear()
 kb_pdf.to_parquet("/tmp/responder/kb.parquet")
 
@@ -110,7 +111,7 @@ kb_pdf.to_parquet("/tmp/responder/kb.parquet")
 # COMMAND ----------
 
 test_pdf = spark.table(GOLD_TEST).select("text_clean", "intent_label").toPandas()
-q_vec    = vectorizer.transform(test_pdf["text_clean"].fillna(""))
+q_vec    = model.encode(test_pdf["text_clean"].fillna("").tolist())
 sims     = cosine_similarity(q_vec, kb_vectors)
 best_idx = sims.argmax(axis=1)
 predicted_intents = kb_pdf["intent_label"].iloc[best_idx].values
@@ -142,9 +143,8 @@ with mlflow.start_run(run_name="cloud_responder") as run:
         "n_kb_entries":    len(kb_pdf),
     })
     mlflow.log_params({
-        "retriever":  "tfidf",
-        "ngram_max":  2,
-        "max_features": 20_000,
+        "retriever":  "sentence-transformers",
+        "model":      "all-MiniLM-L6-v2",
     })
     mlflow.set_tags({"model_type": "cloud_responder",
                      "framework": "sklearn+pyfunc",
@@ -161,14 +161,13 @@ with mlflow.start_run(run_name="cloud_responder") as run:
         artifact_path="model",
         python_model=RetrievalResponder(),
         artifacts={
-            "vectorizer": "/tmp/responder/vectorizer.pkl",
             "kb_vectors": "/tmp/responder/kb_vectors.npy",
             "kb_df":      "/tmp/responder/kb.parquet",
         },
         input_example=input_example,
         signature=signature,
         registered_model_name=CLOUD_MODEL_NAME,
-        pip_requirements=["scikit-learn", "pandas", "numpy"],
+        pip_requirements=["scikit-learn", "pandas", "numpy", "sentence-transformers"],
     )
     run_id = run.info.run_id
 
