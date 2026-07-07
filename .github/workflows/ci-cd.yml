@@ -169,7 +169,7 @@ jobs:
       - name: Update AWS Lambda Function
         run: |
           aws lambda update-function-code \
-            --function-name flowsure-cloud-responder \
+            --function-name mlopsfunc \
             --image-uri ${{ steps.login-ecr.outputs.registry }}/ml-ops:latest
 
       - name: Attach mobile artifacts to GitHub Release
