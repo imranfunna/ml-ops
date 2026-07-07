@@ -85,20 +85,38 @@ pipeline = Pipeline(stages=[tokenizer, stopwords, hashing_tf, idf, label_idx, lr
 
 
 # MAGIC %md
-# MAGIC ## Trainen + evaluatie + logging
+# MAGIC ## Hyperparameter-tuning met 3-fold CrossValidator
 
 # COMMAND ----------
 
-with mlflow.start_run(run_name="edge_classifier") as run:
+grid = (ParamGridBuilder()
+        .addGrid(lr.regParam,            [0.01, 0.1])
+        .build())
+
+evaluator = MulticlassClassificationEvaluator(labelCol="label",
+                                              predictionCol="prediction",
+                                              metricName="f1")
+
+cv = CrossValidator(estimator=pipeline,
+                    estimatorParamMaps=grid,
+                    evaluator=evaluator,
+                    numFolds=3,
+                    parallelism=2,
+                    seed=42)
+
+# COMMAND ----------
+
+# COMMAND ----------
+
+with mlflow.start_run(run_name="edge_classifier_cv") as run:
     mlflow.pyspark.ml.autolog(disable=True)
     
-    # Truncate lineage to prevent Spark Connect ML from serializing the Delta log
-    train = train.localCheckpoint()
+    # DO NOT use train.localCheckpoint() in Spark Connect! It serializes the entire 
+    # dataset into the gRPC payload, causing a 301MB+ MODEL_SIZE_OVERFLOW_EXCEPTION.
+    train_clean = spark.sql(f"SELECT * FROM {GOLD_TRAIN}")
     
-    # We trainen een enkel model in plaats van CrossValidator om de 256MB 
-    # Spark Connect gRPC limiet van Databricks Serverless te vermijden.
-    lr.setRegParam(0.01)
-    best_model   = pipeline.fit(train)
+    cv_model     = cv.fit(train_clean)
+    best_model   = cv_model.bestModel
     best_lr      = best_model.stages[-1]
     best_hash_tf = best_model.stages[2]
 
