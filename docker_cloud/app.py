@@ -5,7 +5,18 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from mangum import Mangum
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(title="FlowSure Cloud Responder API")
+
+# Add CORS Middleware to allow the frontend to fetch from this API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Define request/response schemas
 class PredictRequest(BaseModel):

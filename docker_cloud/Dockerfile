@@ -5,6 +5,8 @@ FROM public.ecr.aws/lambda/python:3.12
 # (AWS Lambda only allows writing to /tmp)
 ENV HF_HOME="/tmp/huggingface"
 ENV MODEL_DIR="/var/task/models"
+ENV MLFLOW_TRACKING_URI="file:///tmp/mlruns"
+ENV HOME="/tmp"
 
 # Copy requirements.txt
 COPY requirements.txt ${LAMBDA_TASK_ROOT}
