@@ -44,9 +44,7 @@ resources:
         - task_key: train_edge
           depends_on: [{ task_key: data_pipeline }]
           notebook_task: { notebook_path: notebooks/02_train_edge_model.py }
-        - task_key: train_edge_portable
-          depends_on: [{ task_key: data_pipeline }]
-          notebook_task: { notebook_path: notebooks/02b_train_edge_portable.py }
+
         - task_key: train_cloud
           depends_on: [{ task_key: data_pipeline }]
           notebook_task: { notebook_path: notebooks/03_train_cloud_model.py }

@@ -28,7 +28,6 @@ import mlflow
 import mlflow.pyfunc
 from pyspark.sql import functions as F, types as T
 from pyspark.sql.functions import current_timestamp
-from pyspark.ml.functions import vector_to_array
 import pandas as pd
 
 os.environ["SPARKML_TEMP_DFS_PATH"] = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}/checkpoints"
@@ -46,7 +45,8 @@ log_pipeline_event(spark, "deploy_and_infer", "started")
 edge_uri  = f"models:/{EDGE_MODEL_NAME}@{CHAMPION_ALIAS}"
 cloud_uri = f"models:/{CLOUD_MODEL_NAME}@{CHAMPION_ALIAS}"
 
-edge_model = mlflow.spark.load_model(edge_uri)
+# Edge model als Spark UDF → distributed inference (sklearn pyfunc)
+edge_udf = mlflow.pyfunc.spark_udf(spark, edge_uri, result_type="struct<predicted_category:string,category_confidence:double>")
 print(f"✅ edge  model geladen: {edge_uri}")
 
 # Cloud model als Spark UDF → distributed inference
@@ -56,16 +56,9 @@ print(f"✅ cloud model geladen: {cloud_uri}")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Label-index → naam mapper
-# MAGIC De classifier geeft een `prediction` (double) terug — we mappen die
-# MAGIC terug naar de originele category-string via de fitted StringIndexer.
-
-# COMMAND ----------
-
-# StringIndexer zit als voorlaatste stage in de pipeline; labels-array is
-# in dezelfde volgorde als de prediction-indices.
-label_names = edge_model.stages[-2].labelsArray[0]
-print("labels:", list(label_names))
+# MAGIC ## Batch-inference
+# MAGIC Draait per default over alle silver-rijen zonder predictie. Latency
+# MAGIC per row wordt gemeten en gelogd voor monitoring.
 
 # COMMAND ----------
 
@@ -80,18 +73,12 @@ def run_batch_inference(source_df):
     """Applies edge + cloud model to a Spark DataFrame and writes predictions."""
 
     t0 = time.time()
-    # Edge model
-    scored = edge_model.transform(source_df)
-
-    # index → naam via array-lookup (append 'UNKNOWN' for handleInvalid='keep' bucket)
-    labels_ext = list(label_names) + ["UNKNOWN"]
-    labels_expr = F.array([F.lit(x) for x in labels_ext])
+    # Edge model (sklearn pyfunc UDF)
+    scored = source_df.withColumn("edge_out", edge_udf(F.col("text_clean")))
     scored = (scored
-        .withColumn("predicted_category",
-                    labels_expr.getItem(F.col("prediction").cast("int")))
-        # confidence = max probability (VectorUDT → array → max)
-        .withColumn("category_confidence",
-                    F.array_max(vector_to_array(F.col("probability"))))
+        .withColumn("predicted_category",  F.col("edge_out.predicted_category"))
+        .withColumn("category_confidence", F.col("edge_out.category_confidence"))
+        .drop("edge_out")
     )
 
     # Cloud model — voeg suggested response toe
@@ -100,9 +87,7 @@ def run_batch_inference(source_df):
         .withColumn("suggested_response", F.col("cloud_out.suggested_response"))
         .withColumn("matched_intent",     F.col("cloud_out.matched_intent"))
         .withColumn("response_confidence", F.col("cloud_out.confidence"))
-        .drop("cloud_out", "features", "raw_features", "tokens",
-              "tokens_clean", "rawPrediction", "probability", "prediction",
-              "label")
+        .drop("cloud_out")
     )
 
     # Priority-heuristiek op basis van category + confidence
@@ -155,20 +140,16 @@ CREATE TABLE IF NOT EXISTS {INCOMING_STREAM_TABLE} (
 
 def start_streaming_inference():
     stream = (spark.readStream.format("delta").table(INCOMING_STREAM_TABLE))
-    scored = edge_model.transform(stream)
-    labels_ext = list(label_names) + ["UNKNOWN"]
-    labels_expr = F.array([F.lit(x) for x in labels_ext])
+    scored = stream.withColumn("edge_out", edge_udf(F.col("text_clean")))
     scored = (scored
-        .withColumn("predicted_category",
-                    labels_expr.getItem(F.col("prediction").cast("int")))
-        .withColumn("category_confidence",
-                    F.array_max(vector_to_array(F.col("probability"))))
+        .withColumn("predicted_category",  F.col("edge_out.predicted_category"))
+        .withColumn("category_confidence", F.col("edge_out.category_confidence"))
+        .drop("edge_out")
         .withColumn("cloud_out", cloud_udf(F.col("text_clean")))
         .withColumn("suggested_response", F.col("cloud_out.suggested_response"))
         .withColumn("matched_intent",     F.col("cloud_out.matched_intent"))
         .withColumn("response_confidence", F.col("cloud_out.confidence"))
-        .drop("cloud_out", "features", "raw_features", "tokens",
-              "tokens_clean", "rawPrediction", "probability", "prediction")
+        .drop("cloud_out")
         .withColumn("priority", F.lit("normal"))
         .withColumn("model_version_edge",  F.lit(edge_uri))
         .withColumn("model_version_cloud", F.lit(cloud_uri))
