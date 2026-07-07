@@ -2,7 +2,7 @@
 # MAGIC %md
 # MAGIC # 03 — Cloud model (retrieval-augmented responder)
 # MAGIC
-# MAGIC **Doel**: gegeven een klantvraag → een conceptantwoord voorstellen dat de
+# MAGIC **Doel**: gegeven een klantvraag > een conceptantwoord voorstellen dat de
 # MAGIC agent kan reviewen en versturen.
 # MAGIC
 # MAGIC ### Aanpak
@@ -186,7 +186,7 @@ with mlflow.start_run(run_name="cloud_responder") as run:
 # MAGIC %md
 # MAGIC ## UC alias promotion
 # MAGIC Voor de responder gebruiken we top-3 hit rate als quality-gate (`>= 0.5`).
-# MAGIC Onder de drempel → `@challenger` (agent-review nodig). Boven → `@champion`.
+# MAGIC Onder de drempel > `@challenger` (agent-review nodig). Boven > `@champion`.
 
 # COMMAND ----------
 
@@ -207,7 +207,7 @@ else:
 client.set_model_version_tag(CLOUD_MODEL_NAME, new_ver, "top3_intent_hit",
                              f"{top3_hit:.4f}")
 client.set_model_version_tag(CLOUD_MODEL_NAME, new_ver, "run_id", run_id)
-print(f"✅ {CLOUD_MODEL_NAME} v{new_ver} → @{alias}")
+print(f"✅ {CLOUD_MODEL_NAME} v{new_ver} > @{alias}")
 
 log_pipeline_event(spark, "train_cloud_model", "success",
                    f"version={new_ver} alias={alias} top3={top3_hit:.3f}")
