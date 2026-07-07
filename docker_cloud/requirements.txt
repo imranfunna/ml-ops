@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+mangum
+sentence-transformers==3.4.1
+pandas
+scikit-learn
+mlflow
+pydantic

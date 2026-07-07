@@ -183,6 +183,8 @@ with mlflow.start_run(run_name="cloud_responder") as run:
         )
     run_id = run.info.run_id
 
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## UC alias promotion
 # MAGIC Voor de responder gebruiken we top-3 hit rate als quality-gate (`>= 0.5`).

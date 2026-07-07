@@ -114,7 +114,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build & push baked image
+      - name: Build & push Edge image
         uses: docker/build-push-action@v6
         with:
           context: docker
@@ -123,6 +123,54 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/flowsure-edge:${{ github.ref_name }}
             ghcr.io/${{ github.repository_owner }}/flowsure-edge:latest
+
+      - name: Pull @champion Cloud Model from MLflow
+        env:
+          DATABRICKS_HOST:  ${{ secrets.DATABRICKS_HOST_DEV }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
+          MLFLOW_TRACKING_URI: databricks
+        run: |
+          pip install mlflow databricks-sdk
+          mkdir -p docker_cloud/models
+          # Download the registered model artifact from Unity Catalog to the docker directory
+          mlflow artifacts download -u models:/flowsure.mlops.flowsure_cloud_responder@champion -d docker_cloud/models/
+
+      - name: Build & push Cloud API image to GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: docker_cloud
+          file: docker_cloud/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/flowsure-cloud-api:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/flowsure-cloud-api:latest
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push Cloud API image to AWS ECR
+        uses: docker/build-push-action@v6
+        with:
+          context: docker_cloud
+          file: docker_cloud/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/ml-ops:latest
+            ${{ steps.login-ecr.outputs.registry }}/ml-ops:${{ github.ref_name }}
+
+      - name: Update AWS Lambda Function
+        run: |
+          aws lambda update-function-code \
+            --function-name flowsure-cloud-responder \
+            --image-uri ${{ steps.login-ecr.outputs.registry }}/ml-ops:latest
 
       - name: Attach mobile artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
