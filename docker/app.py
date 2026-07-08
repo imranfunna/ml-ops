@@ -30,7 +30,8 @@ if not ONNX_PATH.exists() or not LABELS_PATH.exists():
     )
 
 _session = ort.InferenceSession(str(ONNX_PATH), providers=["CPUExecutionProvider"])
-_labels: List[str] = json.loads(LABELS_PATH.read_text())
+_labels_data = json.loads(LABELS_PATH.read_text())
+_labels: List[str] = _labels_data.get("labels", []) if isinstance(_labels_data, dict) else _labels_data
 _input_name = _session.get_inputs()[0].name
 
 
@@ -67,7 +68,7 @@ def predict(req: PredictRequest) -> PredictResponse:
         dt = (time.perf_counter() - t0) * 1000.0 / len(req.texts)
         return PredictResponse(predictions=[
             Prediction(
-                category=_labels[int(p)],
+                category=str(p),
                 confidence=float(np.max(probs[i])),
                 latency_ms=dt,
             )
@@ -144,7 +145,7 @@ async def predict_csv(file: UploadFile = File(...), column_name: str = Form(None
         preds, probs = _session.run(None, {_input_name: arr})
         
         # Voeg de voorspellingen toe aan de resultaten-tabel
-        df["Voorspelde Categorie"] = [_labels[int(p)] for p in preds]
+        df["Voorspelde Categorie"] = [str(p) for p in preds]
         df["Betrouwbaarheid (%)"] = [round(float(np.max(probs[i])) * 100, 1) for i in range(len(probs))]
         
         # Toon de belangrijkste kolommen (gelimiteerd tot eerste 100 rijen voor snelle weergave op mobiel)
